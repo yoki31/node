@@ -2306,7 +2306,7 @@ class FastElementsAccessor : public ElementsAccessorBase<Subclass, KindTraits> {
       }
     } else {
       if (!value.IsNaN()) {
-        double search_value = value.Number();
+        double search_number = value.Number();
         if (IsDoubleElementsKind(Subclass::kind())) {
           // Search for non-NaN Number in PACKED_DOUBLE_ELEMENTS or
           // HOLEY_DOUBLE_ELEMENTS --- Skip TheHole, and trust UCOMISD or
@@ -2316,7 +2316,7 @@ class FastElementsAccessor : public ElementsAccessorBase<Subclass, KindTraits> {
 
           for (size_t k = start_from; k < length; ++k) {
             if (elements.is_the_hole(static_cast<int>(k))) continue;
-            if (elements.get_scalar(static_cast<int>(k)) == search_value) {
+            if (elements.get_scalar(static_cast<int>(k)) == search_number) {
               return Just(true);
             }
           }
@@ -2329,7 +2329,7 @@ class FastElementsAccessor : public ElementsAccessorBase<Subclass, KindTraits> {
 
           for (size_t k = start_from; k < length; ++k) {
             Object element_k = elements.get(static_cast<int>(k));
-            if (element_k.IsNumber() && element_k.Number() == search_value) {
+            if (element_k.IsNumber() && element_k.Number() == search_number) {
               return Just(true);
             }
           }
@@ -3327,27 +3327,33 @@ class TypedElementsAccessor
     DisallowGarbageCollection no_gc;
     JSTypedArray typed_array = JSTypedArray::cast(*receiver);
 
-    // TODO(caitp): return Just(false) here when implementing strict throwing on
-    // detached views.
     if (typed_array.WasDetached()) {
       return Just(value->IsUndefined(isolate) && length > start_from);
     }
 
-    if (value->IsUndefined(isolate) && length > typed_array.length()) {
+    bool out_of_bounds = false;
+    size_t new_length = typed_array.GetLengthOrOutOfBounds(out_of_bounds);
+    if (V8_UNLIKELY(out_of_bounds)) {
+      return Just(value->IsUndefined(isolate) && length > start_from);
+    }
+
+    if (value->IsUndefined(isolate) && length > new_length) {
       return Just(true);
     }
 
     // Prototype has no elements, and not searching for the hole --- limit
     // search to backing store length.
-    if (typed_array.length() < length) {
-      length = typed_array.length();
+    if (new_length < length) {
+      length = new_length;
     }
 
     ElementType typed_search_value;
     ElementType* data_ptr =
         reinterpret_cast<ElementType*>(typed_array.DataPtr());
     auto is_shared = typed_array.buffer().is_shared() ? kShared : kUnshared;
-    if (Kind == BIGINT64_ELEMENTS || Kind == BIGUINT64_ELEMENTS) {
+    if (Kind == BIGINT64_ELEMENTS || Kind == BIGUINT64_ELEMENTS ||
+        Kind == RAB_GSAB_BIGINT64_ELEMENTS ||
+        Kind == RAB_GSAB_BIGUINT64_ELEMENTS) {
       if (!value->IsBigInt()) return Just(false);
       bool lossless;
       typed_search_value = FromHandle(value, &lossless);
@@ -3357,7 +3363,9 @@ class TypedElementsAccessor
       double search_value = value->Number();
       if (!std::isfinite(search_value)) {
         // Integral types cannot represent +Inf or NaN.
-        if (Kind < FLOAT32_ELEMENTS || Kind > FLOAT64_ELEMENTS) {
+        if (!(Kind == FLOAT32_ELEMENTS || Kind == FLOAT64_ELEMENTS ||
+              Kind == RAB_GSAB_FLOAT32_ELEMENTS ||
+              Kind == RAB_GSAB_FLOAT64_ELEMENTS)) {
           return Just(false);
         }
         if (std::isnan(search_value)) {
@@ -3541,7 +3549,7 @@ class TypedElementsAccessor
     CHECK(!source.WasDetached());
     CHECK(!destination.WasDetached());
     DCHECK_LE(start, end);
-    DCHECK_LE(end, source.length());
+    DCHECK_LE(end, source.GetLength());
     size_t count = end - start;
     DCHECK_LE(count, destination.length());
     ElementType* dest_data = static_cast<ElementType*>(destination.DataPtr());
@@ -3558,6 +3566,16 @@ class TypedElementsAccessor
     break;                                                                   \
   }
       TYPED_ARRAYS(TYPED_ARRAY_CASE)
+#undef TYPED_ARRAY_CASE
+
+#define TYPED_ARRAY_CASE(Type, type, TYPE, ctype, NON_RAB_GSAB_TYPE)         \
+  case TYPE##_ELEMENTS: {                                                    \
+    ctype* source_data = reinterpret_cast<ctype*>(source.DataPtr()) + start; \
+    CopyBetweenBackingStores<NON_RAB_GSAB_TYPE##_ELEMENTS, ctype>(           \
+        source_data, dest_data, count, is_shared);                           \
+    break;                                                                   \
+  }
+      RAB_GSAB_TYPED_ARRAYS_WITH_NON_RAB_GSAB_ELEMENTS_KIND(TYPED_ARRAY_CASE)
 #undef TYPED_ARRAY_CASE
       default:
         UNREACHABLE();

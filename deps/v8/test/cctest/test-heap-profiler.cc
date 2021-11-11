@@ -1556,7 +1556,7 @@ class TestActivityControl : public v8::ActivityControl {
         total_(0),
         abort_count_(abort_count),
         reported_finish_(false) {}
-  ControlOption ReportProgressValue(int done, int total) override {
+  ControlOption ReportProgressValue(uint32_t done, uint32_t total) override {
     done_ = done;
     total_ = total;
     CHECK_LE(done_, total_);
@@ -4198,7 +4198,7 @@ TEST(HeapSnapshotDeleteDuringTakeSnapshot) {
     WeakData* data =
         new WeakData{heap_profiler->TakeHeapSnapshot(), &gc_calls, &handle};
 
-    v8::HandleScope scope(env->GetIsolate());
+    v8::HandleScope inner_scope(env->GetIsolate());
     handle.Reset(env->GetIsolate(), v8::Object::New(env->GetIsolate()));
     handle.SetWeak(
         data,

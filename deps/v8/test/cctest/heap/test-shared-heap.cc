@@ -28,9 +28,10 @@ void SetupClientIsolateAndRunCallback(Isolate* shared_isolate,
 
   v8::Isolate::CreateParams create_params;
   create_params.array_buffer_allocator = allocator.get();
+  create_params.experimental_attach_to_shared_isolate =
+      reinterpret_cast<v8::Isolate*>(shared_isolate);
   v8::Isolate* client_isolate = v8::Isolate::New(create_params);
   Isolate* i_client_isolate = reinterpret_cast<Isolate*>(client_isolate);
-  i_client_isolate->AttachToSharedIsolate(shared_isolate);
 
   callback(client_isolate, i_client_isolate);
 
@@ -163,15 +164,15 @@ UNINITIALIZED_TEST(SharedCollectionWithoutClients) {
   Isolate::Delete(shared_isolate);
 }
 
-void AllocateInSharedSpace(Isolate* shared_isolate) {
+void AllocateInSharedHeap(Isolate* shared_isolate, int iterations = 100) {
   SetupClientIsolateAndRunCallback(
       shared_isolate,
-      [](v8::Isolate* client_isolate, Isolate* i_client_isolate) {
+      [iterations](v8::Isolate* client_isolate, Isolate* i_client_isolate) {
         HandleScope scope(i_client_isolate);
         std::vector<Handle<FixedArray>> arrays;
         const int kKeptAliveArrays = 1000;
 
-        for (int i = 0; i < kNumIterations * 100; i++) {
+        for (int i = 0; i < kNumIterations * iterations; i++) {
           HandleScope scope(i_client_isolate);
           Handle<FixedArray> array = i_client_isolate->factory()->NewFixedArray(
               100, AllocationType::kSharedOld);
@@ -179,6 +180,8 @@ void AllocateInSharedSpace(Isolate* shared_isolate) {
             // Keep some of those arrays alive across GCs.
             arrays.push_back(scope.CloseAndEscape(array));
           }
+          i_client_isolate->factory()->NewFixedArray(100,
+                                                     AllocationType::kYoung);
         }
 
         for (Handle<FixedArray> array : arrays) {
@@ -197,7 +200,48 @@ UNINITIALIZED_TEST(SharedCollectionWithOneClient) {
   create_params.array_buffer_allocator = allocator.get();
   Isolate* shared_isolate = Isolate::NewShared(create_params);
 
-  AllocateInSharedSpace(shared_isolate);
+  AllocateInSharedHeap(shared_isolate);
+
+  Isolate::Delete(shared_isolate);
+}
+
+namespace {
+class SharedFixedArrayAllocationThread final : public v8::base::Thread {
+ public:
+  explicit SharedFixedArrayAllocationThread(Isolate* shared)
+      : v8::base::Thread(
+            base::Thread::Options("SharedFixedArrayAllocationThread")),
+        shared_(shared) {}
+
+  void Run() override { AllocateInSharedHeap(shared_, 5); }
+
+  Isolate* shared_;
+};
+}  // namespace
+
+UNINITIALIZED_TEST(SharedCollectionWithMultipleClients) {
+  FLAG_max_old_space_size = 8;
+  if (!ReadOnlyHeap::IsReadOnlySpaceShared()) return;
+  std::unique_ptr<v8::ArrayBuffer::Allocator> allocator(
+      v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+
+  v8::Isolate::CreateParams create_params;
+  create_params.array_buffer_allocator = allocator.get();
+  Isolate* shared_isolate = Isolate::NewShared(create_params);
+
+  std::vector<std::unique_ptr<SharedFixedArrayAllocationThread>> threads;
+  const int kThreads = 4;
+
+  for (int i = 0; i < kThreads; i++) {
+    auto thread =
+        std::make_unique<SharedFixedArrayAllocationThread>(shared_isolate);
+    CHECK(thread->Start());
+    threads.push_back(std::move(thread));
+  }
+
+  for (auto& thread : threads) {
+    thread->Join();
+  }
 
   Isolate::Delete(shared_isolate);
 }

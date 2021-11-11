@@ -110,7 +110,7 @@ void ConcurrentAllocator::UnmarkLinearAllocationArea() {
 AllocationResult ConcurrentAllocator::AllocateInLabSlow(
     int object_size, AllocationAlignment alignment, AllocationOrigin origin) {
   if (!EnsureLab(origin)) {
-    return AllocationResult::Retry(OLD_SPACE);
+    return AllocationResult::Retry(space_->identity());
   }
 
   AllocationResult allocation = lab_.AllocateRawAligned(object_size, alignment);
@@ -124,7 +124,7 @@ bool ConcurrentAllocator::EnsureLab(AllocationOrigin origin) {
       local_heap_, kLabSize, kMaxLabSize, kWordAligned, origin);
   if (!result) return false;
 
-  if (local_heap_->heap()->incremental_marking()->black_allocation()) {
+  if (IsBlackAllocationEnabled()) {
     Address top = result->first;
     Address limit = top + result->second;
     Page::FromAllocationAreaAddress(top)->CreateBlackAreaBackground(top, limit);
@@ -145,17 +145,23 @@ AllocationResult ConcurrentAllocator::AllocateOutsideLab(
     int object_size, AllocationAlignment alignment, AllocationOrigin origin) {
   auto result = space_->RawRefillLabBackground(local_heap_, object_size,
                                                object_size, alignment, origin);
-  if (!result) return AllocationResult::Retry(OLD_SPACE);
+  if (!result) return AllocationResult::Retry(space_->identity());
 
   HeapObject object = HeapObject::FromAddress(result->first);
 
-  if (local_heap_->heap()->incremental_marking()->black_allocation()) {
-    local_heap_->heap()->incremental_marking()->MarkBlackBackground(
-        object, object_size);
+  if (IsBlackAllocationEnabled()) {
+    owning_heap()->incremental_marking()->MarkBlackBackground(object,
+                                                              object_size);
   }
 
   return AllocationResult(object);
 }
+
+bool ConcurrentAllocator::IsBlackAllocationEnabled() const {
+  return owning_heap()->incremental_marking()->black_allocation();
+}
+
+Heap* ConcurrentAllocator::owning_heap() const { return space_->heap(); }
 
 }  // namespace internal
 }  // namespace v8

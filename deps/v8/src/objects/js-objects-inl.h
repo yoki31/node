@@ -397,7 +397,7 @@ void JSObject::FastPropertyAtPut(FieldIndex index, Object value,
 
 void JSObject::WriteToField(InternalIndex descriptor, PropertyDetails details,
                             Object value) {
-  DCHECK_EQ(kField, details.location());
+  DCHECK_EQ(PropertyLocation::kField, details.location());
   DCHECK_EQ(kData, details.kind());
   DisallowGarbageCollection no_gc;
   FieldIndex index = FieldIndex::ForDescriptor(map(), descriptor);
@@ -717,8 +717,6 @@ Maybe<bool> JSReceiver::HasProperty(Handle<JSReceiver> object,
 
 Maybe<bool> JSReceiver::HasOwnProperty(Handle<JSReceiver> object,
                                        uint32_t index) {
-  if (object->IsJSModuleNamespace()) return Just(false);
-
   if (object->IsJSObject()) {  // Shortcut.
     LookupIterator it(object->GetIsolate(), object, index, object,
                       LookupIterator::OWN);

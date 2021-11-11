@@ -69,6 +69,32 @@ static void GenerateTailCallToReturnedCode(MacroAssembler* masm,
 
 namespace {
 
+enum class ArgumentsElementType {
+  kRaw,    // Push arguments as they are.
+  kHandle  // Dereference arguments before pushing.
+};
+
+void Generate_PushArguments(MacroAssembler* masm, Register array, Register argc,
+                            Register scratch,
+                            ArgumentsElementType element_type) {
+  DCHECK(!AreAliased(array, argc, scratch));
+  Label loop, done;
+  __ cmpi(argc, Operand::Zero());
+  __ beq(&done);
+  __ ShiftLeftU64(scratch, argc, Operand(kSystemPointerSizeLog2));
+  __ add(scratch, array, scratch);
+  __ mtctr(argc);
+
+  __ bind(&loop);
+  __ LoadU64WithUpdate(ip, MemOperand(scratch, -kSystemPointerSize));
+  if (element_type == ArgumentsElementType::kHandle) {
+    __ LoadU64(ip, MemOperand(ip));
+  }
+  __ push(ip);
+  __ bdnz(&loop);
+  __ bind(&done);
+}
+
 void Generate_JSBuiltinsConstructStubHelper(MacroAssembler* masm) {
   // ----------- S t a t e -------------
   //  -- r3     : number of arguments
@@ -99,12 +125,15 @@ void Generate_JSBuiltinsConstructStubHelper(MacroAssembler* masm) {
     // correct position (including any undefined), instead of delaying this to
     // InvokeFunction.
 
-    // Set up pointer to last argument (skip receiver).
+    // Set up pointer to first argument (skip receiver).
     __ addi(
         r7, fp,
         Operand(StandardFrameConstants::kCallerSPOffset + kSystemPointerSize));
     // Copy arguments and receiver to the expression stack.
-    __ PushArray(r7, r3, r8, r0);
+    // r7: Pointer to start of arguments.
+    // r3: Number of arguments.
+    Generate_PushArguments(masm, r7, r3, r8, ArgumentsElementType::kRaw);
+
     // The receiver for the builtin/api call.
     __ PushRoot(RootIndex::kTheHoleValue);
 
@@ -234,8 +263,10 @@ void Builtins::Generate_JSConstructStubGeneric(MacroAssembler* masm) {
   Label stack_overflow;
   __ StackOverflowCheck(r3, r8, &stack_overflow);
 
-  // Copy arguments and receiver to the expression stack.
-  __ PushArray(r7, r3, r8, r0);
+  // Copy arguments to the expression stack.
+  // r7: Pointer to start of argument.
+  // r3: Number of arguments.
+  Generate_PushArguments(masm, r7, r3, r8, ArgumentsElementType::kRaw);
 
   // Push implicit receiver.
   __ Push(r9);
@@ -711,25 +742,11 @@ static void Generate_JSEntryTrampolineHelper(MacroAssembler* masm,
 
     __ bind(&enough_stack_space);
 
-    // Copy arguments to the stack in a loop.
+    // Copy arguments to the stack.
     // r4: function
     // r7: argc
     // r8: argv, i.e. points to first arg
-    Label loop, done;
-    __ cmpi(r7, Operand::Zero());
-    __ beq(&done);
-
-    __ ShiftLeftU64(r9, r7, Operand(kSystemPointerSizeLog2));
-    __ add(r8, r8, r9);  // point to last arg
-
-    __ mtctr(r7);
-    __ bind(&loop);
-    __ LoadU64WithUpdate(
-        r9, MemOperand(r8, -kSystemPointerSize));        // read next parameter
-    __ LoadU64(r0, MemOperand(r9));                      // dereference handle
-    __ push(r0);                                         // push parameter
-    __ bdnz(&loop);
-    __ bind(&done);
+    Generate_PushArguments(masm, r8, r7, r9, ArgumentsElementType::kHandle);
 
     // Push the receiver.
     __ Push(r6);
@@ -839,7 +856,7 @@ static void TailCallRuntimeIfMarkerEquals(MacroAssembler* masm,
                                           OptimizationMarker expected_marker,
                                           Runtime::FunctionId function_id) {
   Label no_match;
-  __ cmpi(actual_marker, Operand(expected_marker));
+  __ cmpi(actual_marker, Operand(static_cast<int>(expected_marker)));
   __ bne(&no_match);
   GenerateTailCallToReturnedCode(masm, function_id);
   __ bind(&no_match);
@@ -1851,6 +1868,40 @@ void Builtins::Generate_ReflectConstruct(MacroAssembler* masm) {
           RelocInfo::CODE_TARGET);
 }
 
+namespace {
+
+// Allocate new stack space for |count| arguments and shift all existing
+// arguments already on the stack. |pointer_to_new_space_out| points to the
+// first free slot on the stack to copy additional arguments to and
+// |argc_in_out| is updated to include |count|.
+void Generate_AllocateSpaceAndShiftExistingArguments(
+    MacroAssembler* masm, Register count, Register argc_in_out,
+    Register pointer_to_new_space_out, Register scratch1, Register scratch2) {
+  DCHECK(!AreAliased(count, argc_in_out, pointer_to_new_space_out, scratch1,
+                     scratch2));
+  Register old_sp = scratch1;
+  Register new_space = scratch2;
+  __ addi(old_sp, sp, Operand(-kSystemPointerSize));
+  __ ShiftLeftU64(new_space, count, Operand(kSystemPointerSizeLog2));
+  __ AllocateStackSpace(new_space);
+
+  Register dest = pointer_to_new_space_out;
+  __ addi(dest, sp, Operand(-kSystemPointerSize));
+  __ addi(r0, argc_in_out, Operand(1));
+  __ mtctr(r0);
+  Label loop;
+  __ bind(&loop);
+  __ LoadU64WithUpdate(r0, MemOperand(old_sp, kSystemPointerSize));
+  __ StoreU64WithUpdate(r0, MemOperand(dest, kSystemPointerSize));
+  __ bdnz(&loop);
+
+  // Update total number of arguments, restore dest.
+  __ add(argc_in_out, argc_in_out, count);
+  __ addi(dest, dest, Operand(kSystemPointerSize));
+}
+
+}  // namespace
+
 // static
 // TODO(v8:11615): Observe Code::kMaxArguments in CallOrConstructVarargs
 void Builtins::Generate_CallOrConstructVarargs(MacroAssembler* masm,
@@ -1891,22 +1942,10 @@ void Builtins::Generate_CallOrConstructVarargs(MacroAssembler* masm,
 
   // Move the arguments already in the stack,
   // including the receiver and the return address.
-  {
-    Label copy;
-    Register src = r9, dest = r8;
-    __ addi(src, sp, Operand(-kSystemPointerSize));
-    __ ShiftLeftU64(r0, r7, Operand(kSystemPointerSizeLog2));
-    __ sub(sp, sp, r0);
-    // Update stack pointer.
-    __ addi(dest, sp, Operand(-kSystemPointerSize));
-    __ addi(r0, r3, Operand(1));
-    __ mtctr(r0);
-
-    __ bind(&copy);
-    __ LoadU64WithUpdate(r0, MemOperand(src, kSystemPointerSize));
-    __ StoreU64WithUpdate(r0, MemOperand(dest, kSystemPointerSize));
-    __ bdnz(&copy);
-  }
+  // r7: Number of arguments to make room for.
+  // r3: Number of arguments already on the stack.
+  // r8: Points to first free slot on the stack after arguments were shifted.
+  Generate_AllocateSpaceAndShiftExistingArguments(masm, r7, r3, r8, ip, r9);
 
   // Push arguments onto the stack (thisArgument is already on the stack).
   {
@@ -1923,10 +1962,10 @@ void Builtins::Generate_CallOrConstructVarargs(MacroAssembler* masm,
     __ bne(&skip);
     __ LoadRoot(scratch, RootIndex::kUndefinedValue);
     __ bind(&skip);
-    __ StoreU64WithUpdate(scratch, MemOperand(r8, kSystemPointerSize));
+    __ StoreU64(scratch, MemOperand(r8));
+    __ addi(r8, r8, Operand(kSystemPointerSize));
     __ bdnz(&loop);
     __ bind(&no_args);
-    __ add(r3, r3, r7);
   }
 
   // Tail-call to the actual Call or Construct builtin.
@@ -1995,29 +2034,17 @@ void Builtins::Generate_CallOrConstructForwardVarargs(MacroAssembler* masm,
 
     // Move the arguments already in the stack,
     // including the receiver and the return address.
-    {
-      Label copy;
-      Register src = ip, dest = r5;  // r7 and r10 are context and root.
-      __ addi(src, sp, Operand(-kSystemPointerSize));
-      // Update stack pointer.
-      __ ShiftLeftU64(scratch, r8, Operand(kSystemPointerSizeLog2));
-      __ sub(sp, sp, scratch);
-      __ addi(dest, sp, Operand(-kSystemPointerSize));
-      __ addi(r0, r3, Operand(1));
-      __ mtctr(r0);
+    // r8: Number of arguments to make room for.
+    // r3: Number of arguments already on the stack.
+    // r5: Points to first free slot on the stack after arguments were shifted.
+    Generate_AllocateSpaceAndShiftExistingArguments(masm, r8, r3, r5, scratch,
+                                                    ip);
 
-      __ bind(&copy);
-      __ LoadU64WithUpdate(r0, MemOperand(src, kSystemPointerSize));
-      __ StoreU64WithUpdate(r0, MemOperand(dest, kSystemPointerSize));
-      __ bdnz(&copy);
-    }
     // Copy arguments from the caller frame.
     // TODO(victorgomes): Consider using forward order as potentially more cache
     // friendly.
     {
       Label loop;
-      __ add(r3, r3, r8);
-      __ addi(r5, r5, Operand(kSystemPointerSize));
       __ bind(&loop);
       {
         __ subi(r8, r8, Operand(1));
@@ -2045,16 +2072,10 @@ void Builtins::Generate_CallFunction(MacroAssembler* masm,
   //  -- r3 : the number of arguments (not including the receiver)
   //  -- r4 : the function to call (checked to be a JSFunction)
   // -----------------------------------
-  __ AssertFunction(r4);
+  __ AssertCallableFunction(r4);
 
-  // See ES6 section 9.2.1 [[Call]] ( thisArgument, argumentsList)
-  // Check that the function is not a "classConstructor".
-  Label class_constructor;
   __ LoadTaggedPointerField(
       r5, FieldMemOperand(r4, JSFunction::kSharedFunctionInfoOffset), r0);
-  __ lwz(r6, FieldMemOperand(r5, SharedFunctionInfo::kFlagsOffset));
-  __ TestBitMask(r6, SharedFunctionInfo::IsClassConstructorBit::kMask, r0);
-  __ bne(&class_constructor, cr0);
 
   // Enter the context of the function; ToObject has to run in the function
   // context, and we also need to take the global proxy from the function
@@ -2063,6 +2084,7 @@ void Builtins::Generate_CallFunction(MacroAssembler* masm,
                             r0);
   // We need to convert the receiver for non-native sloppy mode functions.
   Label done_convert;
+  __ lwz(r6, FieldMemOperand(r5, SharedFunctionInfo::kFlagsOffset));
   __ andi(r0, r6,
           Operand(SharedFunctionInfo::IsStrictBit::kMask |
                   SharedFunctionInfo::IsNativeBit::kMask));
@@ -2131,14 +2153,6 @@ void Builtins::Generate_CallFunction(MacroAssembler* masm,
   __ LoadU16(
       r5, FieldMemOperand(r5, SharedFunctionInfo::kFormalParameterCountOffset));
   __ InvokeFunctionCode(r4, no_reg, r5, r3, InvokeType::kJump);
-
-  // The function is a "classConstructor", need to raise an exception.
-  __ bind(&class_constructor);
-  {
-    FrameAndConstantPoolScope frame(masm, StackFrame::INTERNAL);
-    __ push(r4);
-    __ CallRuntime(Runtime::kThrowConstructorNonCallableError);
-  }
 }
 
 namespace {
@@ -2244,34 +2258,48 @@ void Builtins::Generate_Call(MacroAssembler* masm, ConvertReceiverMode mode) {
   //  -- r3 : the number of arguments (not including the receiver)
   //  -- r4 : the target to call (can be any Object).
   // -----------------------------------
+  Register argc = r3;
+  Register target = r4;
+  Register map = r7;
+  Register instance_type = r8;
+  DCHECK(!AreAliased(argc, target, map, instance_type));
 
-  Label non_callable, non_smi;
-  __ JumpIfSmi(r4, &non_callable);
-  __ bind(&non_smi);
-  __ LoadMap(r7, r4);
-  __ CompareInstanceTypeRange(r7, r8, FIRST_JS_FUNCTION_TYPE,
-                              LAST_JS_FUNCTION_TYPE);
+  Label non_callable, class_constructor;
+  __ JumpIfSmi(target, &non_callable);
+  __ LoadMap(map, target);
+  __ CompareInstanceTypeRange(map, instance_type,
+                              FIRST_CALLABLE_JS_FUNCTION_TYPE,
+                              LAST_CALLABLE_JS_FUNCTION_TYPE);
   __ Jump(masm->isolate()->builtins()->CallFunction(mode),
           RelocInfo::CODE_TARGET, le);
-  __ cmpi(r8, Operand(JS_BOUND_FUNCTION_TYPE));
+  __ cmpi(instance_type, Operand(JS_BOUND_FUNCTION_TYPE));
   __ Jump(BUILTIN_CODE(masm->isolate(), CallBoundFunction),
           RelocInfo::CODE_TARGET, eq);
 
   // Check if target has a [[Call]] internal method.
-  __ lbz(r7, FieldMemOperand(r7, Map::kBitFieldOffset));
-  __ TestBit(r7, Map::Bits1::IsCallableBit::kShift, r0);
-  __ beq(&non_callable, cr0);
+  {
+    Register flags = r7;
+    __ lbz(flags, FieldMemOperand(map, Map::kBitFieldOffset));
+    map = no_reg;
+    __ TestBit(flags, Map::Bits1::IsCallableBit::kShift, r0);
+    __ beq(&non_callable, cr0);
+  }
 
   // Check if target is a proxy and call CallProxy external builtin
-  __ cmpi(r8, Operand(JS_PROXY_TYPE));
+  __ cmpi(instance_type, Operand(JS_PROXY_TYPE));
   __ Jump(BUILTIN_CODE(masm->isolate(), CallProxy), RelocInfo::CODE_TARGET, eq);
+
+  // ES6 section 9.2.1 [[Call]] ( thisArgument, argumentsList)
+  // Check that the function is not a "classConstructor".
+  __ cmpi(instance_type, Operand(JS_CLASS_CONSTRUCTOR_TYPE));
+  __ beq(&class_constructor);
 
   // 2. Call to something else, which might have a [[Call]] internal method (if
   // not we raise an exception).
   // Overwrite the original receiver the (original) target.
-  __ StoreReceiver(r4, r3, r8);
+  __ StoreReceiver(target, argc, r8);
   // Let the "call_as_function_delegate" take care of the rest.
-  __ LoadNativeContextSlot(r4, Context::CALL_AS_FUNCTION_DELEGATE_INDEX);
+  __ LoadNativeContextSlot(target, Context::CALL_AS_FUNCTION_DELEGATE_INDEX);
   __ Jump(masm->isolate()->builtins()->CallFunction(
               ConvertReceiverMode::kNotNullOrUndefined),
           RelocInfo::CODE_TARGET);
@@ -2280,8 +2308,17 @@ void Builtins::Generate_Call(MacroAssembler* masm, ConvertReceiverMode mode) {
   __ bind(&non_callable);
   {
     FrameAndConstantPoolScope scope(masm, StackFrame::INTERNAL);
-    __ Push(r4);
+    __ Push(target);
     __ CallRuntime(Runtime::kThrowCalledNonCallable);
+  }
+
+  // 4. The function is a "classConstructor", need to raise an exception.
+  __ bind(&class_constructor);
+  {
+    FrameAndConstantPoolScope scope(masm, StackFrame::INTERNAL);
+    __ Push(target);
+    __ CallRuntime(Runtime::kThrowConstructorNonCallableError);
+    __ Trap();  // Unreachable.
   }
 }
 
@@ -2352,32 +2389,41 @@ void Builtins::Generate_Construct(MacroAssembler* masm) {
   //  -- r6 : the new target (either the same as the constructor or
   //          the JSFunction on which new was invoked initially)
   // -----------------------------------
+  Register argc = r3;
+  Register target = r4;
+  Register map = r7;
+  Register instance_type = r8;
+  DCHECK(!AreAliased(argc, target, map, instance_type));
 
   // Check if target is a Smi.
   Label non_constructor, non_proxy;
-  __ JumpIfSmi(r4, &non_constructor);
+  __ JumpIfSmi(target, &non_constructor);
 
   // Check if target has a [[Construct]] internal method.
-  __ LoadTaggedPointerField(r7, FieldMemOperand(r4, HeapObject::kMapOffset),
-                            r0);
-  __ lbz(r5, FieldMemOperand(r7, Map::kBitFieldOffset));
-  __ TestBit(r5, Map::Bits1::IsConstructorBit::kShift, r0);
-  __ beq(&non_constructor, cr0);
+  __ LoadTaggedPointerField(
+      map, FieldMemOperand(target, HeapObject::kMapOffset), r0);
+  {
+    Register flags = r5;
+    DCHECK(!AreAliased(argc, target, map, instance_type, flags));
+    __ lbz(flags, FieldMemOperand(map, Map::kBitFieldOffset));
+    __ TestBit(flags, Map::Bits1::IsConstructorBit::kShift, r0);
+    __ beq(&non_constructor, cr0);
+  }
 
   // Dispatch based on instance type.
-  __ CompareInstanceTypeRange(r7, r8, FIRST_JS_FUNCTION_TYPE,
+  __ CompareInstanceTypeRange(map, instance_type, FIRST_JS_FUNCTION_TYPE,
                               LAST_JS_FUNCTION_TYPE);
   __ Jump(BUILTIN_CODE(masm->isolate(), ConstructFunction),
           RelocInfo::CODE_TARGET, le);
 
   // Only dispatch to bound functions after checking whether they are
   // constructors.
-  __ cmpi(r8, Operand(JS_BOUND_FUNCTION_TYPE));
+  __ cmpi(instance_type, Operand(JS_BOUND_FUNCTION_TYPE));
   __ Jump(BUILTIN_CODE(masm->isolate(), ConstructBoundFunction),
           RelocInfo::CODE_TARGET, eq);
 
   // Only dispatch to proxies after checking whether they are constructors.
-  __ cmpi(r8, Operand(JS_PROXY_TYPE));
+  __ cmpi(instance_type, Operand(JS_PROXY_TYPE));
   __ bne(&non_proxy);
   __ Jump(BUILTIN_CODE(masm->isolate(), ConstructProxy),
           RelocInfo::CODE_TARGET);
@@ -2386,9 +2432,10 @@ void Builtins::Generate_Construct(MacroAssembler* masm) {
   __ bind(&non_proxy);
   {
     // Overwrite the original receiver with the (original) target.
-    __ StoreReceiver(r4, r3, r8);
+    __ StoreReceiver(target, argc, r8);
     // Let the "call_as_constructor_delegate" take care of the rest.
-    __ LoadNativeContextSlot(r4, Context::CALL_AS_CONSTRUCTOR_DELEGATE_INDEX);
+    __ LoadNativeContextSlot(target,
+                             Context::CALL_AS_CONSTRUCTOR_DELEGATE_INDEX);
     __ Jump(masm->isolate()->builtins()->CallFunction(),
             RelocInfo::CODE_TARGET);
   }
@@ -2484,6 +2531,11 @@ void Builtins::Generate_WasmDebugBreak(MacroAssembler* masm) {
 
 void Builtins::Generate_GenericJSToWasmWrapper(MacroAssembler* masm) {
   // TODO(v8:10701): Implement for this platform.
+  __ Trap();
+}
+
+void Builtins::Generate_WasmReturnPromiseOnSuspend(MacroAssembler* masm) {
+  // TODO(v8:12191): Implement for this platform.
   __ Trap();
 }
 

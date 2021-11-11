@@ -132,8 +132,11 @@ union u32_f32 {
 inline float fsgnj32(float rs1, float rs2, bool n, bool x) {
   u32_f32 a = {.f = rs1}, b = {.f = rs2};
   u32_f32 res;
-  res.u =
-      (a.u & ~F32_SIGN) | ((((x) ? a.u : (n) ? F32_SIGN : 0) ^ b.u) & F32_SIGN);
+  res.u = (a.u & ~F32_SIGN) | ((((x)   ? a.u
+                                 : (n) ? F32_SIGN
+                                       : 0) ^
+                                b.u) &
+                               F32_SIGN);
   return res.f;
 }
 #define F64_SIGN ((uint64_t)1 << 63)
@@ -144,8 +147,11 @@ union u64_f64 {
 inline double fsgnj64(double rs1, double rs2, bool n, bool x) {
   u64_f64 a = {.d = rs1}, b = {.d = rs2};
   u64_f64 res;
-  res.u =
-      (a.u & ~F64_SIGN) | ((((x) ? a.u : (n) ? F64_SIGN : 0) ^ b.u) & F64_SIGN);
+  res.u = (a.u & ~F64_SIGN) | ((((x)   ? a.u
+                                 : (n) ? F64_SIGN
+                                       : 0) ^
+                                b.u) &
+                               F64_SIGN);
   return res.d;
 }
 
@@ -756,6 +762,20 @@ class Simulator : public SimulatorBase {
   type_usew_t<x>::type uimm5 = (type_usew_t<x>::type)(instr_.RvvUimm5()); \
   type_usew_t<x>::type vs2 = Rvvelt<type_usew_t<x>::type>(rvv_vs2_reg(), i);
 
+#define VN_PARAMS(x)                                                    \
+  constexpr int half_x = x >> 1;                                        \
+  type_sew_t<half_x>::type& vd =                                        \
+      Rvvelt<type_sew_t<half_x>::type>(rvv_vd_reg(), i, true);          \
+  type_sew_t<x>::type uimm5 = (type_sew_t<x>::type)(instr_.RvvUimm5()); \
+  type_sew_t<x>::type vs2 = Rvvelt<type_sew_t<x>::type>(rvv_vs2_reg(), i);
+
+#define VN_UPARAMS(x)                                                     \
+  constexpr int half_x = x >> 1;                                          \
+  type_usew_t<half_x>::type& vd =                                         \
+      Rvvelt<type_usew_t<half_x>::type>(rvv_vd_reg(), i, true);           \
+  type_usew_t<x>::type uimm5 = (type_usew_t<x>::type)(instr_.RvvUimm5()); \
+  type_sew_t<x>::type vs2 = Rvvelt<type_sew_t<x>::type>(rvv_vs2_reg(), i);
+
 #define VXI_PARAMS(x)                                                       \
   type_sew_t<x>::type& vd =                                                 \
       Rvvelt<type_sew_t<x>::type>(rvv_vd_reg(), i, true);                   \
@@ -868,8 +888,23 @@ class Simulator : public SimulatorBase {
   }
 
   template <typename T, typename Func>
+  inline T CanonicalizeFPUOpFMA(Func fn, T dst, T src1, T src2) {
+    STATIC_ASSERT(std::is_floating_point<T>::value);
+    auto alu_out = fn(dst, src1, src2);
+    // if any input or result is NaN, the result is quiet_NaN
+    if (std::isnan(alu_out) || std::isnan(src1) || std::isnan(src2) ||
+        std::isnan(dst)) {
+      // signaling_nan sets kInvalidOperation bit
+      if (isSnan(alu_out) || isSnan(src1) || isSnan(src2) || isSnan(dst))
+        set_fflags(kInvalidOperation);
+      alu_out = std::numeric_limits<T>::quiet_NaN();
+    }
+    return alu_out;
+  }
+
+  template <typename T, typename Func>
   inline T CanonicalizeFPUOp3(Func fn) {
-    DCHECK(std::is_floating_point<T>::value);
+    STATIC_ASSERT(std::is_floating_point<T>::value);
     T src1 = std::is_same<float, T>::value ? frs1() : drs1();
     T src2 = std::is_same<float, T>::value ? frs2() : drs2();
     T src3 = std::is_same<float, T>::value ? frs3() : drs3();
@@ -887,7 +922,7 @@ class Simulator : public SimulatorBase {
 
   template <typename T, typename Func>
   inline T CanonicalizeFPUOp2(Func fn) {
-    DCHECK(std::is_floating_point<T>::value);
+    STATIC_ASSERT(std::is_floating_point<T>::value);
     T src1 = std::is_same<float, T>::value ? frs1() : drs1();
     T src2 = std::is_same<float, T>::value ? frs2() : drs2();
     auto alu_out = fn(src1, src2);
@@ -903,7 +938,7 @@ class Simulator : public SimulatorBase {
 
   template <typename T, typename Func>
   inline T CanonicalizeFPUOp1(Func fn) {
-    DCHECK(std::is_floating_point<T>::value);
+    STATIC_ASSERT(std::is_floating_point<T>::value);
     T src1 = std::is_same<float, T>::value ? frs1() : drs1();
     auto alu_out = fn(src1);
     // if any input or result is NaN, the result is quiet_NaN
@@ -920,6 +955,22 @@ class Simulator : public SimulatorBase {
     float alu_out = fn(drs1());
     if (std::isnan(alu_out) || std::isnan(drs1()))
       alu_out = std::numeric_limits<float>::quiet_NaN();
+    return alu_out;
+  }
+
+  template <typename Func>
+  inline float CanonicalizeDoubleToFloatOperation(Func fn, double frs) {
+    float alu_out = fn(frs);
+    if (std::isnan(alu_out) || std::isnan(drs1()))
+      alu_out = std::numeric_limits<float>::quiet_NaN();
+    return alu_out;
+  }
+
+  template <typename Func>
+  inline float CanonicalizeFloatToDoubleOperation(Func fn, float frs) {
+    double alu_out = fn(frs);
+    if (std::isnan(alu_out) || std::isnan(frs1()))
+      alu_out = std::numeric_limits<double>::quiet_NaN();
     return alu_out;
   }
 
@@ -957,6 +1008,8 @@ class Simulator : public SimulatorBase {
   void DecodeRvvIVX();
   void DecodeRvvMVV();
   void DecodeRvvMVX();
+  void DecodeRvvFVV();
+  void DecodeRvvFVF();
   bool DecodeRvvVL();
   bool DecodeRvvVS();
 

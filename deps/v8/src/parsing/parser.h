@@ -130,7 +130,7 @@ struct ParserTypes<Parser> {
 
 class V8_EXPORT_PRIVATE Parser : public NON_EXPORTED_BASE(ParserBase<Parser>) {
  public:
-  explicit Parser(ParseInfo* info);
+  Parser(LocalIsolate* local_isolate, ParseInfo* info, Handle<Script> script);
   ~Parser() {
     delete reusable_preparser_;
     reusable_preparser_ = nullptr;
@@ -161,6 +161,8 @@ class V8_EXPORT_PRIVATE Parser : public NON_EXPORTED_BASE(ParserBase<Parser>) {
 
   // Move statistics to Isolate
   void UpdateStatistics(Isolate* isolate, Handle<Script> script);
+  void UpdateStatistics(Handle<Script> script, int* use_counters,
+                        int* preparse_skipped);
   template <typename IsolateT>
   void HandleSourceURLComments(IsolateT* isolate, Handle<Script> script);
 
@@ -1054,7 +1056,9 @@ class V8_EXPORT_PRIVATE Parser : public NON_EXPORTED_BASE(ParserBase<Parser>) {
   friend class PreParserZoneScope;  // Uses reusable_preparser().
   friend class PreparseDataBuilder;  // Uses preparse_data_buffer()
 
+  LocalIsolate* local_isolate_;
   ParseInfo* info_;
+  Handle<Script> script_;
   Scanner scanner_;
   Zone preparser_zone_;
   PreParser* reusable_preparser_;

@@ -94,6 +94,10 @@ class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE) FactoryBase
   // Create a pre-tenured empty AccessorPair.
   Handle<AccessorPair> NewAccessorPair();
 
+  // Creates a new CodeDataContainer for a Code object.
+  Handle<CodeDataContainer> NewCodeDataContainer(int flags,
+                                                 AllocationType allocation);
+
   // Allocates a fixed array initialized with undefined values.
   Handle<FixedArray> NewFixedArray(
       int length, AllocationType allocation = AllocationType::kYoung);
@@ -153,8 +157,15 @@ class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE) FactoryBase
   Handle<Script> NewScriptWithId(Handle<PrimitiveHeapObject> source,
                                  int script_id);
 
+  Handle<ArrayList> NewArrayList(int size);
+
   Handle<SharedFunctionInfo> NewSharedFunctionInfoForLiteral(
       FunctionLiteral* literal, Handle<Script> script, bool is_toplevel);
+
+  // Create a copy of a given SharedFunctionInfo for use as a placeholder in
+  // off-thread compilation
+  Handle<SharedFunctionInfo> CloneSharedFunctionInfo(
+      Handle<SharedFunctionInfo> other);
 
   Handle<PreparseData> NewPreparseData(int data_length, int children_length);
 
@@ -233,6 +244,11 @@ class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE) FactoryBase
       int capacity, AllocationType allocation);
 
   Handle<FunctionTemplateRareData> NewFunctionTemplateRareData();
+
+  MaybeHandle<Map> GetInPlaceInternalizedStringMap(Map from_string_map);
+
+  AllocationType RefineAllocationTypeForInPlaceInternalizableString(
+      AllocationType allocation, Map string_map);
 
  protected:
   // Allocate memory for an uninitialized array (e.g., a FixedArray or similar).
