@@ -7,6 +7,7 @@
     'node_use_dtrace%': 'false',
     'node_use_etw%': 'false',
     'node_no_browser_globals%': 'false',
+    'node_snapshot_main%': '',
     'node_use_node_snapshot%': 'false',
     'node_use_v8_platform%': 'true',
     'node_use_bundled_v8%': 'true',
@@ -51,6 +52,7 @@
       'deps/acorn/acorn-walk/dist/walk.js',
       'deps/cjs-module-lexer/lexer.js',
       'deps/cjs-module-lexer/dist/lexer.js',
+      'deps/undici/undici.js',
     ],
     'node_mksnapshot_exec': '<(PRODUCT_DIR)/<(EXECUTABLE_PREFIX)node_mksnapshot<(EXECUTABLE_SUFFIX)',
     'mkcodecache_exec': '<(PRODUCT_DIR)/<(EXECUTABLE_PREFIX)mkcodecache<(EXECUTABLE_SUFFIX)',
@@ -194,6 +196,16 @@
           'dependencies': [ 'node_aix_shared' ],
         }, {
           'dependencies': [ '<(node_lib_target_name)' ],
+          'conditions': [
+            ['OS=="win" and node_shared=="true"', {
+              'dependencies': ['generate_node_def'],
+              'msvs_settings': {
+                'VCLinkerTool': {
+                  'ModuleDefinitionFile': '<(PRODUCT_DIR)/<(node_core_target_name).def',
+                },
+              },
+            }],
+          ],
         }],
         [ 'node_intermediate_lib_type=="static_library" and node_shared=="false"', {
           'xcode_settings': {
@@ -233,8 +245,15 @@
         }],
         [ 'node_shared=="true"', {
           'xcode_settings': {
-            'OTHER_LDFLAGS': [ '-Wl,-rpath,@loader_path', ],
+            'OTHER_LDFLAGS': [ '-Wl,-rpath,@loader_path', '-Wl,-rpath,@loader_path/../lib'],
           },
+          'conditions': [
+            ['OS=="linux"', {
+               'ldflags': [
+                 '-Wl,-rpath,\\$$ORIGIN/../lib'
+               ],
+            }],
+          ],
         }],
         [ 'enable_lto=="true"', {
           'xcode_settings': {
@@ -314,23 +333,47 @@
           'dependencies': [
             'node_mksnapshot',
           ],
-          'actions': [
-            {
-              'action_name': 'node_mksnapshot',
-              'process_outputs_as_sources': 1,
-              'inputs': [
-                '<(node_mksnapshot_exec)',
+          'conditions': [
+            ['node_snapshot_main!=""', {
+              'actions': [
+                {
+                  'action_name': 'node_mksnapshot',
+                  'process_outputs_as_sources': 1,
+                  'inputs': [
+                    '<(node_mksnapshot_exec)',
+                    '<(node_snapshot_main)',
+                  ],
+                  'outputs': [
+                    '<(SHARED_INTERMEDIATE_DIR)/node_snapshot.cc',
+                  ],
+                  'action': [
+                    '<(node_mksnapshot_exec)',
+                    '--build-snapshot',
+                    '<(node_snapshot_main)',
+                    '<@(_outputs)',
+                  ],
+                },
               ],
-              'outputs': [
-                '<(SHARED_INTERMEDIATE_DIR)/node_snapshot.cc',
+            }, {
+              'actions': [
+                {
+                  'action_name': 'node_mksnapshot',
+                  'process_outputs_as_sources': 1,
+                  'inputs': [
+                    '<(node_mksnapshot_exec)',
+                  ],
+                  'outputs': [
+                    '<(SHARED_INTERMEDIATE_DIR)/node_snapshot.cc',
+                  ],
+                  'action': [
+                    '<@(_inputs)',
+                    '<@(_outputs)',
+                  ],
+                },
               ],
-              'action': [
-                '<@(_inputs)',
-                '<@(_outputs)',
-              ],
-            },
+            }],
           ],
-        }, {
+          }, {
           'sources': [
             'src/node_snapshot_stub.cc'
           ],
@@ -505,6 +548,7 @@
         'src/node_report_module.cc',
         'src/node_report_utils.cc',
         'src/node_serdes.cc',
+        'src/node_shadow_realm.cc',
         'src/node_snapshotable.cc',
         'src/node_sockaddr.cc',
         'src/node_stat_watcher.cc',
@@ -517,6 +561,7 @@
         'src/node_util.cc',
         'src/node_v8.cc',
         'src/node_wasi.cc',
+        'src/node_wasm_web_api.cc',
         'src/node_watchdog.cc',
         'src/node_worker.cc',
         'src/node_zlib.cc',
@@ -610,7 +655,9 @@
         'src/node_report.h',
         'src/node_revert.h',
         'src/node_root_certs.h',
+        'src/node_shadow_realm.h',
         'src/node_snapshotable.h',
+        'src/node_snapshot_builder.h',
         'src/node_sockaddr.h',
         'src/node_sockaddr-inl.h',
         'src/node_stat_watcher.h',
@@ -721,6 +768,7 @@
           'libraries': [
             'Dbghelp',
             'Psapi',
+            'Winmm',
             'Ws2_32',
           ],
         }],
@@ -1474,31 +1522,40 @@
         },
       ]
     }], # end aix section
-    # TODO(RaisinTen): Enable this to build on other platforms as well.
-    ['(OS=="mac" or (OS=="linux" and target_arch=="x64")) and \
-      node_use_openssl=="true"', {
-      'targets': [
-        {
-          'target_name': 'test_crypto_engine',
-          'type': 'shared_library',
-          'include_dirs': ['deps/openssl/openssl/include'],
-          'sources': ['test/fixtures/test_crypto_engine.c'],
-          'conditions': [
-            ['OS=="mac"', {
-              'dependencies': ['deps/openssl/openssl.gyp:openssl'],
-              'xcode_settings': {
-                'OTHER_CFLAGS': ['-Wno-deprecated-declarations'],
-              },
-            }],
-            ['OS=="linux" and target_arch=="x64"', {
-              'cflags': [
-                '-Wno-deprecated-declarations',
-                '-fPIC',
-              ],
-            }],
-          ],
-        }, # test_crypto_engine
-      ], # end targets
-    }], # end node_use_openssl section
+    ['OS=="win" and node_shared=="true"', {
+     'targets': [
+       {
+         'target_name': 'gen_node_def',
+         'type': 'executable',
+         'sources': [
+           'tools/gen_node_def.cc'
+         ],
+       },
+       {
+         'target_name': 'generate_node_def',
+         'dependencies': [
+           'gen_node_def',
+           '<(node_lib_target_name)',
+         ],
+         'type': 'none',
+         'actions': [
+           {
+             'action_name': 'generate_node_def_action',
+             'inputs': [
+               '<(PRODUCT_DIR)/<(node_lib_target_name).dll'
+             ],
+             'outputs': [
+               '<(PRODUCT_DIR)/<(node_core_target_name).def',
+             ],
+             'action': [
+               '<(PRODUCT_DIR)/gen_node_def.exe',
+               '<@(_inputs)',
+               '<@(_outputs)',
+             ],
+           },
+         ],
+       },
+     ],
+   }], # end win section
   ], # end conditions block
 }

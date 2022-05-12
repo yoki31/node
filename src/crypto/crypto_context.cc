@@ -508,6 +508,9 @@ void SecureContext::Init(const FunctionCallbackInfo<Value>& args) {
   }
 
   sc->ctx_.reset(SSL_CTX_new(method));
+  if (!sc->ctx_) {
+    return ThrowCryptoError(env, ERR_get_error(), "SSL_CTX_new");
+  }
   SSL_CTX_set_app_data(sc->ctx_.get(), sc);
 
   // Disable SSLv2 in the case when method == TLS_method() and the
@@ -1037,6 +1040,8 @@ void SecureContext::LoadPKCS12(const FunctionCallbackInfo<Value>& args) {
     // TODO(@jasnell): Should this use ThrowCryptoError?
     unsigned long err = ERR_get_error();  // NOLINT(runtime/int)
     const char* str = ERR_reason_error_string(err);
+    str = str != nullptr ? str : "Unknown error";
+
     return env->ThrowError(str);
   }
 }

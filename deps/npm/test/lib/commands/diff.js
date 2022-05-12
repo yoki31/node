@@ -31,10 +31,9 @@ const npm = mockNpm({
 })
 
 const mocks = {
-  npmlog: { info: noop, verbose: noop },
+  'proc-log': { info: noop, verbose: noop },
   libnpmdiff: (...args) => libnpmdiff(...args),
   'npm-registry-fetch': async () => ({}),
-  '../../../lib/utils/usage.js': () => 'usage instructions',
 }
 
 t.afterEach(() => {
@@ -169,13 +168,14 @@ t.test('single arg', t => {
     libnpmdiff = async ([a, b], opts) => {
       t.equal(a, 'foo@2.1.4', 'should use expected spec')
       t.equal(b, `file:${fooPath}`, 'should compare to cwd')
-      t.match(opts, {
-        ...npm.flatOptions,
-        diffFiles: [
-          './foo.js',
-          './bar.js',
-        ],
-      }, 'should forward flatOptions and diffFiles')
+      t.match(
+        opts,
+        {
+          ...npm.flatOptions,
+          diffFiles: ['./foo.js', './bar.js'],
+        },
+        'should forward flatOptions and diffFiles'
+      )
     }
 
     config.diff = ['2.1.4']
@@ -264,7 +264,7 @@ t.test('single arg', t => {
     const Diff = t.mock('../../../lib/commands/diff.js', {
       ...mocks,
       pacote: {
-        packument: (spec) => {
+        packument: spec => {
           t.equal(spec.name, 'bar', 'should have expected spec name')
         },
       },
@@ -273,7 +273,11 @@ t.test('single arg', t => {
         return { version: '1.8.10' }
       },
       libnpmdiff: async ([a, b], opts) => {
-        t.equal(a, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+        t.equal(
+          a,
+          `bar@file:${resolve(path, 'node_modules/bar')}`,
+          'should target local node_modules pkg'
+        )
         t.equal(b, 'bar@1.8.10', 'should have possible semver range spec')
       },
     })
@@ -325,7 +329,7 @@ t.test('single arg', t => {
     const Diff = t.mock('../../../lib/commands/diff.js', {
       ...mocks,
       pacote: {
-        packument: (spec) => {
+        packument: spec => {
           t.equal(spec.name, 'lorem', 'should have expected spec name')
         },
       },
@@ -334,7 +338,11 @@ t.test('single arg', t => {
         return { version: '2.1.0' }
       },
       libnpmdiff: async ([a, b], opts) => {
-        t.equal(a, `lorem@file:${resolve(path, 'globalDir/lib/node_modules/lorem')}`, 'should target local node_modules pkg')
+        t.equal(
+          a,
+          `lorem@file:${resolve(path, 'globalDir/lib/node_modules/lorem')}`,
+          'should target local node_modules pkg'
+        )
         t.equal(b, 'lorem@2.1.0', 'should have possible semver range spec')
       },
     })
@@ -364,7 +372,11 @@ t.test('single arg', t => {
     })
 
     libnpmdiff = async ([a, b], opts) => {
-      t.equal(a, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+      t.equal(
+        a,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
       t.equal(b, 'bar@2.0.0', 'should have expected comparison spec')
     }
 
@@ -405,9 +417,8 @@ t.test('single arg', t => {
 
     const Diff = t.mock('../../../lib/commands/diff.js', {
       ...mocks,
-      '../../../lib/utils/read-package-name.js': async () => 'my-project',
       pacote: {
-        packument: (spec) => {
+        packument: spec => {
           t.equal(spec.name, 'lorem', 'should have expected spec name')
         },
       },
@@ -416,7 +427,11 @@ t.test('single arg', t => {
         return { version: '2.2.2' }
       },
       libnpmdiff: async ([a, b], opts) => {
-        t.equal(a, `lorem@file:${resolve(path, 'node_modules/lorem')}`, 'should target local node_modules pkg')
+        t.equal(
+          a,
+          `lorem@file:${resolve(path, 'node_modules/lorem')}`,
+          'should target local node_modules pkg'
+        )
         t.equal(b, 'lorem@2.2.2', 'should have expected target spec')
       },
     })
@@ -439,7 +454,6 @@ t.test('single arg', t => {
 
     const Diff = t.mock('../../../lib/commands/diff.js', {
       ...mocks,
-      '../../../lib/utils/read-package-name.js': async () => 'my-project',
       '@npmcli/arborist': class {
         constructor () {
           throw new Error('ERR')
@@ -548,7 +562,11 @@ t.test('first arg is a qualified spec', t => {
 
     libnpmdiff = async ([a, b], opts) => {
       t.equal(a, 'bar@2.0.0', 'should set expected first spec')
-      t.equal(b, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+      t.equal(
+        b,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
     }
 
     npm.prefix = path
@@ -606,15 +624,20 @@ t.test('first arg is a known dependency name', async t => {
     })
 
     libnpmdiff = async ([a, b], opts) => {
-      t.equal(a, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+      t.equal(
+        a,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
       t.equal(b, 'bar@2.0.0', 'should set expected second spec')
     }
 
     npm.prefix = path
     config.diff = ['bar', 'bar@2.0.0']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -645,15 +668,24 @@ t.test('first arg is a known dependency name', async t => {
     })
 
     libnpmdiff = async ([a, b], opts) => {
-      t.equal(a, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
-      t.equal(b, `bar-fork@file:${resolve(path, 'node_modules/bar-fork')}`, 'should target fork local node_modules pkg')
+      t.equal(
+        a,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
+      t.equal(
+        b,
+        `bar-fork@file:${resolve(path, 'node_modules/bar-fork')}`,
+        'should target fork local node_modules pkg'
+      )
     }
 
     npm.prefix = path
     config.diff = ['bar', 'bar-fork']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -678,15 +710,20 @@ t.test('first arg is a known dependency name', async t => {
     })
 
     libnpmdiff = async ([a, b], opts) => {
-      t.equal(a, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+      t.equal(
+        a,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
       t.equal(b, 'bar@2.0.0', 'should use package name from first arg')
     }
 
     npm.prefix = path
     config.diff = ['bar', '2.0.0']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -711,7 +748,11 @@ t.test('first arg is a known dependency name', async t => {
     })
 
     libnpmdiff = async ([a, b], opts) => {
-      t.equal(a, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+      t.equal(
+        a,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
       t.equal(b, 'bar-fork@latest', 'should set expected second spec')
     }
 
@@ -759,7 +800,11 @@ t.test('first arg is a valid semver range', t => {
 
     libnpmdiff = async ([a, b], opts) => {
       t.equal(a, 'bar@1.0.0', 'should use name from second arg')
-      t.equal(b, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should set expected second spec from nm')
+      t.equal(
+        b,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should set expected second spec from nm'
+      )
     }
 
     npm.prefix = path
@@ -847,8 +892,9 @@ t.test('first arg is an unknown dependency name', t => {
 
     config.diff = ['bar', 'bar@2.0.0']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -874,14 +920,19 @@ t.test('first arg is an unknown dependency name', t => {
 
     libnpmdiff = async ([a, b], opts) => {
       t.equal(a, 'bar-fork@latest', 'should use latest tag')
-      t.equal(b, `bar@file:${resolve(path, 'node_modules/bar')}`, 'should target local node_modules pkg')
+      t.equal(
+        b,
+        `bar@file:${resolve(path, 'node_modules/bar')}`,
+        'should target local node_modules pkg'
+      )
     }
 
     npm.prefix = path
     config.diff = ['bar-fork', 'bar']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -895,8 +946,9 @@ t.test('first arg is an unknown dependency name', t => {
 
     config.diff = ['bar', '^1.0.0']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -910,8 +962,9 @@ t.test('first arg is an unknown dependency name', t => {
 
     config.diff = ['bar', 'bar-fork']
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -928,8 +981,9 @@ t.test('first arg is an unknown dependency name', t => {
     npm.prefix = path
 
     diff.exec([], err => {
-      if (err)
+      if (err) {
         throw err
+      }
     })
   })
 
@@ -943,10 +997,14 @@ t.test('various options', t => {
     flatOptions.diffNameOnly = true
 
     libnpmdiff = async ([a, b], opts) => {
-      t.match(opts, {
-        ...npm.flatOptions,
-        diffNameOnly: true,
-      }, 'should forward nameOnly=true option')
+      t.match(
+        opts,
+        {
+          ...npm.flatOptions,
+          diffNameOnly: true,
+        },
+        'should forward nameOnly=true option'
+      )
     }
 
     await diff.exec([])
@@ -960,13 +1018,14 @@ t.test('various options', t => {
     libnpmdiff = async ([a, b], opts) => {
       t.equal(a, 'foo@2.1.4', 'should use expected spec')
       t.equal(b, 'foo@3.0.0', 'should use expected spec')
-      t.match(opts, {
-        ...npm.flatOptions,
-        diffFiles: [
-          './foo.js',
-          './bar.js',
-        ],
-      }, 'should forward diffFiles values')
+      t.match(
+        opts,
+        {
+          ...npm.flatOptions,
+          diffFiles: ['./foo.js', './bar.js'],
+        },
+        'should forward diffFiles values'
+      )
     }
 
     await diff.exec(['./foo.js', './bar.js'])
@@ -978,13 +1037,14 @@ t.test('various options', t => {
     libnpmdiff = async ([a, b], opts) => {
       t.equal(a, 'foo@latest', 'should have default spec')
       t.equal(b, `file:${fooPath}`, 'should compare to cwd')
-      t.match(opts, {
-        ...npm.flatOptions,
-        diffFiles: [
-          './foo.js',
-          './bar.js',
-        ],
-      }, 'should forward all remaining items as filenames')
+      t.match(
+        opts,
+        {
+          ...npm.flatOptions,
+          diffFiles: ['./foo.js', './bar.js'],
+        },
+        'should forward all remaining items as filenames'
+      )
     }
 
     await diff.exec(['./foo.js', './bar.js'])
@@ -1001,15 +1061,19 @@ t.test('various options', t => {
     flatOptions.diffText = true
 
     libnpmdiff = async ([a, b], opts) => {
-      t.match(opts, {
-        ...npm.flatOptions,
-        diffContext: 5,
-        diffIgnoreWhitespace: true,
-        diffNoPrefix: false,
-        diffSrcPrefix: 'foo/',
-        diffDstPrefix: 'bar/',
-        diffText: true,
-      }, 'should forward diff options')
+      t.match(
+        opts,
+        {
+          ...npm.flatOptions,
+          diffContext: 5,
+          diffIgnoreWhitespace: true,
+          diffNoPrefix: false,
+          diffSrcPrefix: 'foo/',
+          diffDstPrefix: 'bar/',
+          diffText: true,
+        },
+        'should forward diff options'
+      )
     }
 
     await diff.exec([])
@@ -1062,10 +1126,14 @@ t.test('workspaces', t => {
     npm.prefix = path
     npm.localPrefix = path
     await diff.execWorkspaces([], [])
-    t.same(diffCalls, [
-      ['workspace-a@latest', join(`file:${path}`, 'workspace-a')],
-      ['workspace-b@latest', join(`file:${path}`, 'workspace-b')],
-    ], 'should call libnpmdiff with workspaces params')
+    t.same(
+      diffCalls,
+      [
+        ['workspace-a@latest', join(`file:${path}`, 'workspace-a')],
+        ['workspace-b@latest', join(`file:${path}`, 'workspace-b')],
+      ],
+      'should call libnpmdiff with workspaces params'
+    )
   })
 
   t.test('one workspace', async t => {
@@ -1076,9 +1144,11 @@ t.test('workspaces', t => {
     npm.prefix = path
     npm.localPrefix = path
     await diff.execWorkspaces([], ['workspace-a'])
-    t.same(diffCalls, [
-      ['workspace-a@latest', join(`file:${path}`, 'workspace-a')],
-    ], 'should call libnpmdiff with workspaces params')
+    t.same(
+      diffCalls,
+      [['workspace-a@latest', join(`file:${path}`, 'workspace-a')]],
+      'should call libnpmdiff with workspaces params'
+    )
   })
 
   t.test('invalid workspace', async t => {
@@ -1087,14 +1157,8 @@ t.test('workspaces', t => {
     }
     npm.prefix = path
     npm.localPrefix = path
-    await t.rejects(
-      diff.execWorkspaces([], ['workspace-x']),
-      /No workspaces found/
-    )
-    await t.rejects(
-      diff.execWorkspaces([], ['workspace-x']),
-      /workspace-x/
-    )
+    await t.rejects(diff.execWorkspaces([], ['workspace-x']), /No workspaces found/)
+    await t.rejects(diff.execWorkspaces([], ['workspace-x']), /workspace-x/)
   })
   t.end()
 })

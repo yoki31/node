@@ -15,12 +15,11 @@ const npm = mockNpm({
   },
 })
 const npmFetch = { json: noop }
-const npmlog = { error: noop, info: noop, verbose: noop }
+const log = { error: noop, info: noop, verbose: noop }
 const mocks = {
-  npmlog,
+  'proc-log': log,
   'npm-registry-fetch': npmFetch,
   '../../../lib/utils/get-identity.js': async () => 'foo',
-  '../../../lib/utils/usage.js': () => 'usage instructions',
 }
 
 const Star = t.mock('../../../lib/commands/star.js', mocks)
@@ -29,31 +28,33 @@ const star = new Star(npm)
 t.afterEach(() => {
   config.unicode = false
   config['star.unstar'] = false
-  npmlog.info = noop
+  log.info = noop
   result = ''
 })
 
 t.test('no args', async t => {
   await t.rejects(
     star.exec([]),
-    /usage instructions/,
-    'should throw usage instructions'
+    { code: 'EUSAGE' },
+    'should throw usage error'
   )
 })
 
 t.test('star a package', async t => {
   t.plan(4)
   const pkgName = '@npmcli/arborist'
-  npmFetch.json = async (uri, opts) => ({
-    _id: pkgName,
-    _rev: 'hash',
-    users: (
-      opts.method === 'PUT'
-        ? { foo: true }
-        : {}
-    ),
-  })
-  npmlog.info = (title, msg, id) => {
+  npmFetch.json = async (uri, opts) => {
+    return {
+      _id: pkgName,
+      _rev: 'hash',
+      users: (
+        opts.method === 'PUT'
+          ? { foo: true }
+          : {}
+      ),
+    }
+  }
+  log.info = (title, msg, id) => {
     t.equal(title, 'star', 'should use expected title')
     t.equal(msg, 'starring', 'should use expected msg')
     t.equal(id, pkgName, 'should use expected id')
@@ -70,15 +71,17 @@ t.test('unstar a package', async t => {
   t.plan(4)
   const pkgName = '@npmcli/arborist'
   config['star.unstar'] = true
-  npmFetch.json = async (uri, opts) => ({
-    _id: pkgName,
-    _rev: 'hash',
-    ...(opts.method === 'PUT'
-      ? {}
-      : { foo: true }
-    ),
-  })
-  npmlog.info = (title, msg, id) => {
+  npmFetch.json = async (uri, opts) => {
+    return {
+      _id: pkgName,
+      _rev: 'hash',
+      ...(opts.method === 'PUT'
+        ? {}
+        : { foo: true }
+      ),
+    }
+  }
+  log.info = (title, msg, id) => {
     t.equal(title, 'unstar', 'should use expected title')
     t.equal(msg, 'unstarring', 'should use expected msg')
     t.equal(id, pkgName, 'should use expected id')

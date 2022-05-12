@@ -198,6 +198,8 @@ assert.throws(() => new Blob({}), {
   const b = new Blob();
   assert.strictEqual(inspect(b, { depth: null }),
                      'Blob { size: 0, type: \'\' }');
+  assert.strictEqual(inspect(b, { depth: 1 }),
+                     'Blob { size: 0, type: \'\' }');
   assert.strictEqual(inspect(b, { depth: -1 }), '[Blob]');
 }
 
@@ -229,3 +231,42 @@ assert.throws(() => new Blob({}), {
     });
   });
 }
+
+{
+  assert.throws(() => Reflect.get(Blob.prototype, 'type', {}), {
+    code: 'ERR_INVALID_THIS',
+  });
+  assert.throws(() => Reflect.get(Blob.prototype, 'size', {}), {
+    code: 'ERR_INVALID_THIS',
+  });
+  assert.throws(() => Blob.prototype.slice(Blob.prototype, 0, 1), {
+    code: 'ERR_INVALID_THIS',
+  });
+  assert.throws(() => Blob.prototype.stream.call(), {
+    code: 'ERR_INVALID_THIS',
+  });
+}
+
+(async () => {
+  assert.rejects(async () => Blob.prototype.arrayBuffer.call(), {
+    code: 'ERR_INVALID_THIS',
+  });
+  assert.rejects(async () => Blob.prototype.text.call(), {
+    code: 'ERR_INVALID_THIS',
+  });
+})().then(common.mustCall());
+
+(async () => {
+  const blob = new Blob([
+    new Uint8Array([0x50, 0x41, 0x53, 0x53]),
+    new Int8Array([0x50, 0x41, 0x53, 0x53]),
+    new Uint16Array([0x4150, 0x5353]),
+    new Int16Array([0x4150, 0x5353]),
+    new Uint32Array([0x53534150]),
+    new Int32Array([0x53534150]),
+    new Float32Array([0xD341500000]),
+  ]);
+
+  assert.strictEqual(blob.size, 28);
+  assert.strictEqual(blob.type, '');
+})().then(common.mustCall());

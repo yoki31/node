@@ -4,30 +4,32 @@
 // renders also ensures that any params we've defined in our commands work.
 const t = require('tap')
 const util = require('util')
-const { real: mockNpm } = require('../fixtures/mock-npm.js')
-const { cmdList } = require('../../lib/utils/cmd-list.js')
-
-const { Npm, outputs } = mockNpm(t)
-const npm = new Npm()
+const { load: loadMockNpm } = require('../fixtures/mock-npm.js')
+const { cmdList, plumbing } = require('../../lib/utils/cmd-list.js')
+const allCmds = [...cmdList, ...plumbing]
 
 t.test('load each command', async t => {
-  t.afterEach(() => {
-    outputs.length = 0
-  })
-  t.plan(cmdList.length)
-  await npm.load()
-  npm.config.set('usage', true) // This makes npm.exec output the usage
-  for (const cmd of cmdList.sort((a, b) => a.localeCompare(b, 'en'))) {
+  t.plan(allCmds.length)
+  for (const cmd of allCmds.sort((a, b) => a.localeCompare(b, 'en'))) {
     t.test(cmd, async t => {
+      const { npm, outputs } = await loadMockNpm(t, {
+        config: { usage: true },
+      })
       const impl = await npm.cmd(cmd)
-      if (impl.completion)
+      if (impl.completion) {
         t.type(impl.completion, 'function', 'completion, if present, is a function')
+      }
       t.type(impl.exec, 'function', 'implementation has an exec function')
       t.type(impl.execWorkspaces, 'function', 'implementation has an execWorkspaces function')
       t.equal(util.inspect(impl.exec), '[AsyncFunction: exec]', 'exec function is async')
-      t.equal(util.inspect(impl.execWorkspaces), '[AsyncFunction: execWorkspaces]', 'execWorkspaces function is async')
+      t.equal(
+        util.inspect(impl.execWorkspaces),
+        '[AsyncFunction: execWorkspaces]',
+        'execWorkspaces function is async'
+      )
       t.ok(impl.description, 'implementation has a description')
       t.ok(impl.name, 'implementation has a name')
+      t.ok(impl.ignoreImplicitWorkspace !== undefined, 'implementation has ignoreImplictWorkspace')
       t.match(impl.usage, cmd, 'usage contains the command')
       await npm.exec(cmd, [])
       t.match(outputs[0][0], impl.usage, 'usage is what is output')

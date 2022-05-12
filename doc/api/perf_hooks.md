@@ -17,7 +17,7 @@ Node.js supports the following [Web Performance APIs][]:
 * [User Timing][]
 
 ```js
-const { PerformanceObserver, performance } = require('perf_hooks');
+const { PerformanceObserver, performance } = require('node:perf_hooks');
 
 const obs = new PerformanceObserver((items) => {
   console.log(items.getEntries()[0].duration);
@@ -53,6 +53,17 @@ added: v8.5.0
 * `name` {string}
 
 If `name` is not provided, removes all `PerformanceMark` objects from the
+Performance Timeline. If `name` is provided, removes only the named mark.
+
+### `performance.clearMeasures([name])`
+
+<!-- YAML
+added: v16.7.0
+-->
+
+* `name` {string}
+
+If `name` is not provided, removes all `PerformanceMeasure` objects from the
 Performance Timeline. If `name` is provided, removes only the named mark.
 
 ### `performance.eventLoopUtilization([utilization1[, utilization2]])`
@@ -100,8 +111,8 @@ of how a mostly idle process will have a high ELU.
 
 ```js
 'use strict';
-const { eventLoopUtilization } = require('perf_hooks').performance;
-const { spawnSync } = require('child_process');
+const { eventLoopUtilization } = require('node:perf_hooks').performance;
+const { spawnSync } = require('node:child_process');
 
 setImmediate(() => {
   const elu = eventLoopUtilization();
@@ -117,6 +128,47 @@ Although the CPU is mostly idle while running this script, the value of
 Passing in a user-defined object instead of the result of a previous call to
 `eventLoopUtilization()` will lead to undefined behavior. The return values
 are not guaranteed to reflect any correct state of the event loop.
+
+### `performance.getEntries()`
+
+<!-- YAML
+added: v16.7.0
+-->
+
+* Returns: {PerformanceEntry\[]}
+
+Returns a list of `PerformanceEntry` objects in chronological order with
+respect to `performanceEntry.startTime`. If you are only interested in
+performance entries of certain types or that have certain names, see
+`performance.getEntriesByType()` and `performance.getEntriesByName()`.
+
+### `performance.getEntriesByName(name[, type])`
+
+<!-- YAML
+added: v16.7.0
+-->
+
+* `name` {string}
+* `type` {string}
+* Returns: {PerformanceEntry\[]}
+
+Returns a list of `PerformanceEntry` objects in chronological order
+with respect to `performanceEntry.startTime` whose `performanceEntry.name` is
+equal to `name`, and optionally, whose `performanceEntry.entryType` is equal to
+`type`.
+
+### `performance.getEntriesByType(type)`
+
+<!-- YAML
+added: v16.7.0
+-->
+
+* `type` {string}
+* Returns: {PerformanceEntry\[]}
+
+Returns a list of `PerformanceEntry` objects in chronological order
+with respect to `performanceEntry.startTime` whose `performanceEntry.entryType`
+is equal to `type`.
 
 ### `performance.mark([name[, options]])`
 
@@ -139,6 +191,12 @@ Creates a new `PerformanceMark` entry in the Performance Timeline. A
 `performanceEntry.entryType` is always `'mark'`, and whose
 `performanceEntry.duration` is always `0`. Performance marks are used
 to mark specific significant moments in the Performance Timeline.
+
+The created `PerformanceMark` entry is put in the global Performance Timeline
+and can be queried with `performance.getEntries`,
+`performance.getEntriesByName`, and `performance.getEntriesByType`. When the
+observation is performed, the entries should be cleared from the global
+Performance Timeline manually with `performance.clearMarks`.
 
 ### `performance.measure(name[, startMarkOrOptions[, endMark]])`
 
@@ -182,6 +240,12 @@ in the Performance Timeline or any of the timestamp properties provided by the
 `PerformanceNodeTiming` class. `endMark` will be `performance.now()`
 if no parameter is passed, otherwise if the named `endMark` does not exist, an
 error will be thrown.
+
+The created `PerformanceMeasure` entry is put in the global Performance Timeline
+and can be queried with `performance.getEntries`,
+`performance.getEntriesByName`, and `performance.getEntriesByType`. When the
+observation is performed, the entries should be cleared from the global
+Performance Timeline manually with `performance.clearMeasures`.
 
 ### `performance.nodeTiming`
 
@@ -248,7 +312,7 @@ event type in order for the timing details to be accessed.
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 function someFunction() {
   console.log('hello world');
@@ -258,6 +322,9 @@ const wrapped = performance.timerify(someFunction);
 
 const obs = new PerformanceObserver((list) => {
   console.log(list.getEntries()[0].duration);
+
+  performance.clearMarks();
+  performance.clearMeasures();
   obs.disconnect();
 });
 obs.observe({ entryTypes: ['function'] });
@@ -464,6 +531,30 @@ When `performanceEntry.type` is equal to `'function'`, the
 `performanceEntry.detail` property will be an {Array} listing
 the input arguments to the timed function.
 
+### Net ('net') Details
+
+When `performanceEntry.type` is equal to `'net'`, the
+`performanceEntry.detail` property will be an {Object} containing
+additional information.
+
+If `performanceEntry.name` is equal to `connect`, the `detail`
+will contain the following properties: `host`, `port`.
+
+### DNS ('dns') Details
+
+When `performanceEntry.type` is equal to `'dns'`, the
+`performanceEntry.detail` property will be an {Object} containing
+additional information.
+
+If `performanceEntry.name` is equal to `lookup`, the `detail`
+will contain the following properties: `hostname`, `family`, `hints`, `verbatim`.
+
+If `performanceEntry.name` is equal to `lookupService`, the `detail` will
+contain the following properties: `host`, `port`.
+
+If `performanceEntry.name` is equal to `queryxxx` or `getHostByAddr`, the `detail` will
+contain the following properties: `host`, `ttl`.
+
 ## Class: `PerformanceNodeTiming`
 
 <!-- YAML
@@ -568,6 +659,12 @@ initialized.
 
 <!-- YAML
 added: v8.5.0
+changes:
+  - version: v18.0.0
+    pr-url: https://github.com/nodejs/node/pull/41678
+    description: Passing an invalid callback to the `callback` argument
+                 now throws `ERR_INVALID_ARG_TYPE` instead of
+                 `ERR_INVALID_CALLBACK`.
 -->
 
 * `callback` {Function}
@@ -581,10 +678,13 @@ added: v8.5.0
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 const obs = new PerformanceObserver((list, observer) => {
   console.log(list.getEntries());
+
+  performance.clearMarks();
+  performance.clearMeasures();
   observer.disconnect();
 });
 obs.observe({ entryTypes: ['mark'], buffered: true });
@@ -644,10 +744,10 @@ or `options.type`:
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 const obs = new PerformanceObserver((list, observer) => {
-  // Called three times synchronously. `list` contains one item.
+  // Called once asynchronously. `list` contains three items.
 });
 obs.observe({ type: 'mark' });
 
@@ -680,7 +780,7 @@ with respect to `performanceEntry.startTime`.
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 const obs = new PerformanceObserver((perfObserverList, observer) => {
   console.log(perfObserverList.getEntries());
@@ -700,6 +800,9 @@ const obs = new PerformanceObserver((perfObserverList, observer) => {
    *   }
    * ]
    */
+
+  performance.clearMarks();
+  performance.clearMeasures();
   observer.disconnect();
 });
 obs.observe({ type: 'mark' });
@@ -727,7 +830,7 @@ equal to `name`, and optionally, whose `performanceEntry.entryType` is equal to
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 const obs = new PerformanceObserver((perfObserverList, observer) => {
   console.log(perfObserverList.getEntriesByName('meow'));
@@ -755,6 +858,9 @@ const obs = new PerformanceObserver((perfObserverList, observer) => {
    * ]
    */
   console.log(perfObserverList.getEntriesByName('test', 'measure')); // []
+
+  performance.clearMarks();
+  performance.clearMeasures();
   observer.disconnect();
 });
 obs.observe({ entryTypes: ['mark', 'measure'] });
@@ -780,7 +886,7 @@ is equal to `type`.
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 const obs = new PerformanceObserver((perfObserverList, observer) => {
   console.log(perfObserverList.getEntriesByType('mark'));
@@ -800,6 +906,8 @@ const obs = new PerformanceObserver((perfObserverList, observer) => {
    *   }
    * ]
    */
+  performance.clearMarks();
+  performance.clearMeasures();
   observer.disconnect();
 });
 obs.observe({ type: 'mark' });
@@ -817,10 +925,11 @@ added:
 -->
 
 * `options` {Object}
-  * `min` {number|bigint} The minimum recordable value. Must be an integer
+  * `lowest` {number|bigint} The lowest discernible value. Must be an integer
     value greater than 0. **Default:** `1`.
-  * `max` {number|bigint} The maximum recordable value. Must be an integer
-    value greater than `min`. **Default:** `Number.MAX_SAFE_INTEGER`.
+  * `highest` {number|bigint} The highest recordable value. Must be an integer
+    value that is equal to or greater than two times `lowest`.
+    **Default:** `Number.MAX_SAFE_INTEGER`.
   * `figures` {number} The number of accuracy digits. Must be a number between
     `1` and `5`. **Default:** `3`.
 * Returns {RecordableHistogram}
@@ -850,7 +959,7 @@ of the timer, and those delays are specifically what this API is intended to
 detect.
 
 ```js
-const { monitorEventLoopDelay } = require('perf_hooks');
+const { monitorEventLoopDelay } = require('node:perf_hooks');
 const h = monitorEventLoopDelay({ resolution: 20 });
 h.enable();
 // Do something.
@@ -870,6 +979,30 @@ console.log(h.percentile(99));
 added: v11.10.0
 -->
 
+### `histogram.count`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* {number}
+
+The number of samples recorded by the histogram.
+
+### `histogram.countBigInt`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* {bigint}
+
+The number of samples recorded by the histogram.
+
 ### `histogram.exceeds`
 
 <!-- YAML
@@ -881,6 +1014,19 @@ added: v11.10.0
 The number of times the event loop delay exceeded the maximum 1 hour event
 loop delay threshold.
 
+### `histogram.exceedsBigInt`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* {bigint}
+
+The number of times the event loop delay exceeded the maximum 1 hour event
+loop delay threshold.
+
 ### `histogram.max`
 
 <!-- YAML
@@ -888,6 +1034,18 @@ added: v11.10.0
 -->
 
 * {number}
+
+The maximum recorded event loop delay.
+
+### `histogram.maxBigInt`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* {bigint}
 
 The maximum recorded event loop delay.
 
@@ -911,6 +1069,18 @@ added: v11.10.0
 
 The minimum recorded event loop delay.
 
+### `histogram.minBigInt`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* {bigint}
+
+The minimum recorded event loop delay.
+
 ### `histogram.percentile(percentile)`
 
 <!-- YAML
@@ -922,10 +1092,35 @@ added: v11.10.0
 
 Returns the value at the given percentile.
 
+### `histogram.percentileBigInt(percentile)`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* `percentile` {number} A percentile value in the range (0, 100].
+* Returns: {bigint}
+
+Returns the value at the given percentile.
+
 ### `histogram.percentiles`
 
 <!-- YAML
 added: v11.10.0
+-->
+
+* {Map}
+
+Returns a `Map` object detailing the accumulated percentile distribution.
+
+### `histogram.percentilesBigInt`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
 -->
 
 * {Map}
@@ -990,6 +1185,18 @@ added:
   - v14.18.0
 -->
 
+### `histogram.add(other)`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+-->
+
+* `other` {RecordableHistogram}
+
+Adds the values from `other` to this histogram.
+
 ### `histogram.record(val)`
 
 <!-- YAML
@@ -1021,11 +1228,11 @@ to execute the callback).
 
 ```js
 'use strict';
-const async_hooks = require('async_hooks');
+const async_hooks = require('node:async_hooks');
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
+} = require('node:perf_hooks');
 
 const set = new Set();
 const hook = async_hooks.createHook({
@@ -1050,6 +1257,7 @@ hook.enable();
 const obs = new PerformanceObserver((list, observer) => {
   console.log(list.getEntries()[0]);
   performance.clearMarks();
+  performance.clearMeasures();
   observer.disconnect();
 });
 obs.observe({ entryTypes: ['measure'], buffered: true });
@@ -1069,8 +1277,8 @@ dependencies:
 const {
   performance,
   PerformanceObserver
-} = require('perf_hooks');
-const mod = require('module');
+} = require('node:perf_hooks');
+const mod = require('node:module');
 
 // Monkey patch the require function
 mod.Module.prototype.require =
@@ -1083,11 +1291,79 @@ const obs = new PerformanceObserver((list) => {
   entries.forEach((entry) => {
     console.log(`require('${entry[0]}')`, entry.duration);
   });
+  performance.clearMarks();
+  performance.clearMeasures();
   obs.disconnect();
 });
 obs.observe({ entryTypes: ['function'], buffered: true });
 
 require('some-module');
+```
+
+### Measuring how long one HTTP round-trip takes
+
+The following example is used to trace the time spent by HTTP client
+(`OutgoingMessage`) and HTTP request (`IncomingMessage`). For HTTP client,
+it means the time interval between starting the request and receiving the
+response, and for HTTP request, it means the time interval between receiving
+the request and sending the response:
+
+```js
+'use strict';
+const { PerformanceObserver } = require('node:perf_hooks');
+const http = require('node:http');
+
+const obs = new PerformanceObserver((items) => {
+  items.getEntries().forEach((item) => {
+    console.log(item);
+  });
+});
+
+obs.observe({ entryTypes: ['http'] });
+
+const PORT = 8080;
+
+http.createServer((req, res) => {
+  res.end('ok');
+}).listen(PORT, () => {
+  http.get(`http://127.0.0.1:${PORT}`);
+});
+```
+
+### Measuring how long the `net.connect` (only for TCP) takes when the connection is successful
+
+```js
+'use strict';
+const { PerformanceObserver } = require('node:perf_hooks');
+const net = require('node:net');
+const obs = new PerformanceObserver((items) => {
+  items.getEntries().forEach((item) => {
+    console.log(item);
+  });
+});
+obs.observe({ entryTypes: ['net'] });
+const PORT = 8080;
+net.createServer((socket) => {
+  socket.destroy();
+}).listen(PORT, () => {
+  net.connect(PORT);
+});
+```
+
+### Measuring how long the DNS takes when the request is successful
+
+```js
+'use strict';
+const { PerformanceObserver } = require('node:perf_hooks');
+const dns = require('node:dns');
+const obs = new PerformanceObserver((items) => {
+  items.getEntries().forEach((item) => {
+    console.log(item);
+  });
+});
+obs.observe({ entryTypes: ['dns'] });
+dns.lookup('localhost', () => {});
+dns.promises.resolve('localhost');
 ```
 
 [Async Hooks]: async_hooks.md

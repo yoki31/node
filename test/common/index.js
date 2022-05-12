@@ -68,12 +68,12 @@ if (process.argv.length === 2 &&
     !process.env.NODE_SKIP_FLAG_CHECK &&
     isMainThread &&
     hasCrypto &&
-    require.main &&
-    require('cluster').isPrimary) {
+    require('cluster').isPrimary &&
+    fs.existsSync(process.argv[1])) {
   // The copyright notice is relatively big and the flags could come afterwards.
   const bytesToRead = 1500;
   const buffer = Buffer.allocUnsafe(bytesToRead);
-  const fd = fs.openSync(require.main.filename, 'r');
+  const fd = fs.openSync(process.argv[1], 'r');
   const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead);
   fs.closeSync(fd);
   const source = buffer.toString('utf8', 0, bytesRead);
@@ -120,6 +120,17 @@ const isFreeBSD = process.platform === 'freebsd';
 const isOpenBSD = process.platform === 'openbsd';
 const isLinux = process.platform === 'linux';
 const isOSX = process.platform === 'darwin';
+const isPi = (() => {
+  try {
+    // Normal Raspberry Pi detection is to find the `Raspberry Pi` string in
+    // the contents of `/sys/firmware/devicetree/base/model` but that doesn't
+    // work inside a container. Match the chipset model number instead.
+    const cpuinfo = fs.readFileSync('/proc/cpuinfo', { encoding: 'utf8' });
+    return /^Hardware\s*:\s*(.*)$/im.exec(cpuinfo)?.[1] === 'BCM2835';
+  } catch {
+    return false;
+  }
+})();
 
 const isDumbTerminal = process.env.TERM === 'dumb';
 
@@ -246,15 +257,10 @@ function platformTimeout(ms) {
   if (isAIX)
     return multipliers.two * ms; // Default localhost speed is slower on AIX
 
-  if (process.arch !== 'arm')
-    return ms;
+  if (isPi)
+    return multipliers.two * ms;  // Raspberry Pi devices
 
-  const armv = process.config.variables.arm_version;
-
-  if (armv === '7')
-    return multipliers.two * ms;  // ARMv7
-
-  return ms; // ARMv8+
+  return ms;
 }
 
 let knownGlobals = [
@@ -298,6 +304,37 @@ if (global.PerformanceMeasure) {
 // can add this to the list above instead.
 if (global.structuredClone) {
   knownGlobals.push(global.structuredClone);
+}
+
+if (global.fetch) {
+  knownGlobals.push(fetch);
+}
+if (hasCrypto && global.crypto) {
+  knownGlobals.push(global.crypto);
+  knownGlobals.push(global.Crypto);
+  knownGlobals.push(global.CryptoKey);
+  knownGlobals.push(global.SubtleCrypto);
+}
+if (global.ReadableStream) {
+  knownGlobals.push(
+    global.ReadableStream,
+    global.ReadableStreamDefaultReader,
+    global.ReadableStreamBYOBReader,
+    global.ReadableStreamBYOBRequest,
+    global.ReadableByteStreamController,
+    global.ReadableStreamDefaultController,
+    global.TransformStream,
+    global.TransformStreamDefaultController,
+    global.WritableStream,
+    global.WritableStreamDefaultWriter,
+    global.WritableStreamDefaultController,
+    global.ByteLengthQueuingStrategy,
+    global.CountQueuingStrategy,
+    global.TextEncoderStream,
+    global.TextDecoderStream,
+    global.CompressionStream,
+    global.DecompressionStream,
+  );
 }
 
 function allowGlobals(...allowlist) {
@@ -549,7 +586,11 @@ function _expectWarning(name, expected, code) {
     expected.forEach(([_, code]) => assert(code, expected));
   }
   return mustCall((warning) => {
-    const [ message, code ] = expected.shift();
+    const expectedProperties = expected.shift();
+    if (!expectedProperties) {
+      assert.fail(`Unexpected extra warning received: ${warning}`);
+    }
+    const [ message, code ] = expectedProperties;
     assert.strictEqual(warning.name, name);
     if (typeof message === 'string') {
       assert.strictEqual(warning.message, message);
@@ -776,6 +817,7 @@ const common = {
   isMainThread,
   isOpenBSD,
   isOSX,
+  isPi,
   isSunOS,
   isWindows,
   localIPv6Hosts,
@@ -810,7 +852,7 @@ const common = {
     const re = isWindows ? /Loopback Pseudo-Interface/ : /lo/;
     return Object.keys(iFaces).some((name) => {
       return re.test(name) &&
-             iFaces[name].some(({ family }) => family === 'IPv6');
+             iFaces[name].some(({ family }) => family === 6);
     });
   },
 

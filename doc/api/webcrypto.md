@@ -6,10 +6,10 @@
 
 Node.js provides an implementation of the standard [Web Crypto API][].
 
-Use `require('crypto').webcrypto` to access this module.
+Use `require('node:crypto').webcrypto` to access this module.
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 (async function() {
 
@@ -19,9 +19,12 @@ const { subtle } = require('crypto').webcrypto;
     length: 256
   }, true, ['sign', 'verify']);
 
+  const enc = new TextEncoder();
+  const message = enc.encode('I love cupcakes');
+
   const digest = await subtle.sign({
     name: 'HMAC'
-  }, key, 'I love cupcakes');
+  }, key, message);
 
 })();
 ```
@@ -36,7 +39,7 @@ or asymmetric key pairs (public key and private key).
 #### AES keys
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function generateAesKey(length = 256) {
   const key = await subtle.generateKey({
@@ -48,10 +51,10 @@ async function generateAesKey(length = 256) {
 }
 ```
 
-#### Elliptic curve key pairs
+#### ECDSA key pairs
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function generateEcKey(namedCurve = 'P-521') {
   const {
@@ -66,10 +69,10 @@ async function generateEcKey(namedCurve = 'P-521') {
 }
 ```
 
-#### ED25519/ED448/X25519/X448 Elliptic curve key pairs
+#### ED25519/ED448/X25519/X448 key pairs
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function generateEd25519Key() {
   return subtle.generateKey({
@@ -89,7 +92,7 @@ async function generateX25519Key() {
 #### HMAC keys
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function generateHmacKey(hash = 'SHA-256') {
   const key = await subtle.generateKey({
@@ -104,7 +107,7 @@ async function generateHmacKey(hash = 'SHA-256') {
 #### RSA key pairs
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 const publicExponent = new Uint8Array([1, 0, 1]);
 
 async function generateRsaKey(modulusLength = 2048, hash = 'SHA-256') {
@@ -125,14 +128,14 @@ async function generateRsaKey(modulusLength = 2048, hash = 'SHA-256') {
 ### Encryption and decryption
 
 ```js
-const { subtle, getRandomValues } = require('crypto').webcrypto;
+const crypto = require('node:crypto').webcrypto;
 
 async function aesEncrypt(plaintext) {
   const ec = new TextEncoder();
   const key = await generateAesKey();
-  const iv = getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(16));
 
-  const ciphertext = await subtle.encrypt({
+  const ciphertext = await crypto.subtle.encrypt({
     name: 'AES-CBC',
     iv,
   }, key, ec.encode(plaintext));
@@ -146,7 +149,7 @@ async function aesEncrypt(plaintext) {
 
 async function aesDecrypt(ciphertext, key, iv) {
   const dec = new TextDecoder();
-  const plaintext = await subtle.decrypt({
+  const plaintext = await crypto.subtle.decrypt({
     name: 'AES-CBC',
     iv,
   }, key, ciphertext);
@@ -158,7 +161,7 @@ async function aesDecrypt(ciphertext, key, iv) {
 ### Exporting and importing keys
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function generateAndExportHmacKey(format = 'jwk', hash = 'SHA-512') {
   const key = await subtle.generateKey({
@@ -182,7 +185,7 @@ async function importHmacKey(keyData, format = 'jwk', hash = 'SHA-512') {
 ### Wrapping and unwrapping keys
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function generateAndWrapHmacKey(format = 'jwk', hash = 'SHA-512') {
   const [
@@ -225,7 +228,7 @@ async function unwrapHmacKey(
 ### Sign and verify
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function sign(key, data) {
   const ec = new TextEncoder();
@@ -249,7 +252,7 @@ async function verify(key, signature, data) {
 ### Deriving bits and keys
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function pbkdf2(pass, salt, iterations = 1000, length = 256) {
   const ec = new TextEncoder();
@@ -292,7 +295,7 @@ async function pbkdf2Key(pass, salt, iterations = 1000, length = 256) {
 ### Digest
 
 ```js
-const { subtle } = require('crypto').webcrypto;
+const { subtle } = require('node:crypto').webcrypto;
 
 async function digest(data, algorithm = 'SHA-512') {
   const ec = new TextEncoder();
@@ -301,7 +304,7 @@ async function digest(data, algorithm = 'SHA-512') {
 }
 ```
 
-## Algorithm Matrix
+## Algorithm matrix
 
 The table details the algorithms supported by the Node.js Web Crypto API
 implementation and the APIs supported for each:
@@ -335,8 +338,9 @@ implementation and the APIs supported for each:
 added: v15.0.0
 -->
 
-Calling `require('crypto').webcrypto` returns an instance of the `Crypto` class.
-`Crypto` is a singleton that provides access to the remainder of the crypto API.
+Calling `require('node:crypto').webcrypto` returns an instance of the `Crypto`
+class. `Crypto` is a singleton that provides access to the remainder of the
+crypto API.
 
 ### `crypto.subtle`
 
@@ -354,11 +358,14 @@ Provides access to the `SubtleCrypto` API.
 added: v15.0.0
 -->
 
-* `typedArray` {Buffer|TypedArray|DataView|ArrayBuffer}
-* Returns: {Buffer|TypedArray|DataView|ArrayBuffer} Returns `typedArray`.
+* `typedArray` {Buffer|TypedArray}
+* Returns: {Buffer|TypedArray}
 
 Generates cryptographically strong random values. The given `typedArray` is
 filled with random values, and a reference to `typedArray` is returned.
+
+The given `typedArray` must be an integer-based instance of {TypedArray},
+i.e. `Float32Array` and `Float64Array` are not accepted.
 
 An error will be thrown if the given `typedArray` is larger than 65,536 bytes.
 
@@ -387,7 +394,7 @@ added: v15.0.0
 
 <!--lint disable maximum-line-length remark-lint-->
 
-* Type: {AesKeyGenParams|RsaHashedKeyGenParams|EcKeyGenParams|HmacKeyGenParams|NodeDsaKeyGenParams|NodeDhKeyGenParams}
+* Type: {AesKeyGenParams|RsaHashedKeyGenParams|EcKeyGenParams|HmacKeyGenParams|NodeDsaKeyGenParams|NodeDhKeyGenParams|NodeEdKeyGenParams}
 
 <!--lint enable maximum-line-length remark-lint-->
 
@@ -839,10 +846,10 @@ promise is resolved with a {CryptoKey} object.
 The wrapping algorithms currently supported include:
 
 * `'RSA-OAEP'`
-* `'AES-CTR'`[^1]
-* `'AES-CBC'`[^1]
-* `'AES-GCM'`[^1]
-* `'AES-KW'`[^1]
+* `'AES-CTR'`
+* `'AES-CBC'`
+* `'AES-GCM'`
+* `'AES-KW'`
 
 The unwrapped key algorithms supported include:
 
@@ -920,7 +927,7 @@ The wrapping algorithms currently supported include:
 * `'AES-GCM'`
 * `'AES-KW'`
 
-## Algorithm Parameters
+## Algorithm parameters
 
 The algorithm parameter objects define the methods and parameters used by
 the various {SubtleCrypto} methods. While described here as "classes", they
@@ -1013,9 +1020,14 @@ added: v15.0.0
 
 * Type: {ArrayBuffer|TypedArray|DataView|Buffer}
 
-The initialization vector must be unique for every encryption operation
-using a given key. It is recommended by the AES-GCM specification that
-this contain at least 12 random bytes.
+The initialization vector must be unique for every encryption operation using a
+given key.
+
+Ideally, this is a deterministic 12-byte value that is computed in such a way
+that it is guaranteed to be unique across all invocations that use the same key.
+Alternatively, the initialization vector may consist of at least 12
+cryptographically random bytes. For more information on constructing
+initialization vectors for AES-GCM, refer to Section 8 of [NIST SP 800-38D][].
 
 #### `aesGcmParams.name`
 
@@ -1917,5 +1929,6 @@ added: v15.0.0
 
 [JSON Web Key]: https://tools.ietf.org/html/rfc7517
 [Key usages]: #cryptokeyusages
+[NIST SP 800-38D]: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf
 [RFC 4122]: https://www.rfc-editor.org/rfc/rfc4122.txt
 [Web Crypto API]: https://www.w3.org/TR/WebCryptoAPI/

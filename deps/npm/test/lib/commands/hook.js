@@ -1,18 +1,20 @@
 const t = require('tap')
+const { fake: mockNpm } = require('../../fixtures/mock-npm')
 
 const output = []
-const npm = {
+const npm = mockNpm({
   flatOptions: {
     json: false,
     parseable: false,
-    silent: false,
-    loglevel: 'info',
     unicode: false,
   },
-  output: (msg) => {
+  config: {
+    loglevel: 'info',
+  },
+  output: msg => {
     output.push(msg)
   },
-}
+})
 
 const pkgTypes = {
   semver: 'package',
@@ -28,13 +30,14 @@ const libnpmhook = {
     hookArgs = { pkg, uri, secret, opts }
     return { id: 1, name: pkg.replace(/^@/, ''), type: pkgTypes[pkg], endpoint: uri }
   },
-  ls: async (opts) => {
+  ls: async opts => {
     hookArgs = opts
     let id = 0
-    if (hookResponse)
+    if (hookResponse) {
       return hookResponse
+    }
 
-    return Object.keys(pkgTypes).map((name) => ({
+    return Object.keys(pkgTypes).map(name => ({
       id: ++id,
       name: name.replace(/^@/, ''),
       type: pkgTypes[name],
@@ -45,7 +48,12 @@ const libnpmhook = {
   rm: async (id, opts) => {
     hookArgs = { id, opts }
     const pkg = Object.keys(pkgTypes)[0]
-    return { id: 1, name: pkg.replace(/^@/, ''), type: pkgTypes[pkg], endpoint: 'https://google.com' }
+    return {
+      id: 1,
+      name: pkg.replace(/^@/, ''),
+      type: pkgTypes[pkg],
+      endpoint: 'https://google.com',
+    }
   },
   update: async (id, uri, secret, opts) => {
     hookArgs = { id, uri, secret, opts }
@@ -55,16 +63,12 @@ const libnpmhook = {
 }
 
 const Hook = t.mock('../../../lib/commands/hook.js', {
-  '../../../lib/utils/otplease.js': async (opts, fn) => fn(opts),
   libnpmhook,
 })
 const hook = new Hook(npm)
 
 t.test('npm hook no args', async t => {
-  await t.rejects(
-    hook.exec([]),
-    hook.usage, 'throws usage with no arguments'
-  )
+  await t.rejects(hook.exec([]), hook.usage, 'throws usage with no arguments')
 })
 
 t.test('npm hook add', async t => {
@@ -75,12 +79,16 @@ t.test('npm hook add', async t => {
 
   await hook.exec(['add', 'semver', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    pkg: 'semver',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'provided the correct arguments to libnpmhook')
+  t.match(
+    hookArgs,
+    {
+      pkg: 'semver',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'provided the correct arguments to libnpmhook'
+  )
   t.strictSame(output, ['+ semver  ->  https://google.com'], 'prints the correct output')
 })
 
@@ -94,12 +102,16 @@ t.test('npm hook add - unicode output', async t => {
 
   await hook.exec(['add', 'semver', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    pkg: 'semver',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'provided the correct arguments to libnpmhook')
+  t.match(
+    hookArgs,
+    {
+      pkg: 'semver',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'provided the correct arguments to libnpmhook'
+  )
   t.strictSame(output, ['+ semver  ➜  https://google.com'], 'prints the correct output')
 })
 
@@ -113,18 +125,26 @@ t.test('npm hook add - json output', async t => {
 
   await hook.exec(['add', '@npmcli', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    pkg: '@npmcli',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'provided the correct arguments to libnpmhook')
-  t.strictSame(JSON.parse(output[0]), {
-    id: 1,
-    name: 'npmcli',
-    endpoint: 'https://google.com',
-    type: 'scope',
-  }, 'prints the correct json output')
+  t.match(
+    hookArgs,
+    {
+      pkg: '@npmcli',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'provided the correct arguments to libnpmhook'
+  )
+  t.strictSame(
+    JSON.parse(output[0]),
+    {
+      id: 1,
+      name: 'npmcli',
+      endpoint: 'https://google.com',
+      type: 'scope',
+    },
+    'prints the correct json output'
+  )
 })
 
 t.test('npm hook add - parseable output', async t => {
@@ -137,36 +157,48 @@ t.test('npm hook add - parseable output', async t => {
 
   await hook.exec(['add', '@npmcli', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    pkg: '@npmcli',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'provided the correct arguments to libnpmhook')
-  t.strictSame(output[0].split(/\t/), [
-    'id', 'name', 'type', 'endpoint',
-  ], 'prints the correct parseable output headers')
-  t.strictSame(output[1].split(/\t/), [
-    '1', 'npmcli', 'scope', 'https://google.com',
-  ], 'prints the correct parseable values')
+  t.match(
+    hookArgs,
+    {
+      pkg: '@npmcli',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'provided the correct arguments to libnpmhook'
+  )
+  t.strictSame(
+    output[0].split(/\t/),
+    ['id', 'name', 'type', 'endpoint'],
+    'prints the correct parseable output headers'
+  )
+  t.strictSame(
+    output[1].split(/\t/),
+    ['1', 'npmcli', 'scope', 'https://google.com'],
+    'prints the correct parseable values'
+  )
 })
 
 t.test('npm hook add - silent output', async t => {
-  npm.flatOptions.silent = true
+  npm.config.set('loglevel', 'silent')
   t.teardown(() => {
-    npm.flatOptions.silent = false
+    npm.config.set('loglevel', 'info')
     hookArgs = null
     output.length = 0
   })
 
   await hook.exec(['add', '@npmcli', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    pkg: '@npmcli',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'provided the correct arguments to libnpmhook')
+  t.match(
+    hookArgs,
+    {
+      pkg: '@npmcli',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'provided the correct arguments to libnpmhook'
+  )
   t.strictSame(output, [], 'printed no output')
 })
 
@@ -178,10 +210,14 @@ t.test('npm hook ls', async t => {
 
   await hook.exec(['ls'])
 
-  t.strictSame(hookArgs, {
-    ...npm.flatOptions,
-    package: undefined,
-  }, 'received the correct arguments')
+  t.match(
+    hookArgs,
+    {
+      ...npm.flatOptions,
+      package: undefined,
+    },
+    'received the correct arguments'
+  )
   t.equal(output[0], 'You have 3 hooks configured.', 'prints the correct header')
   const out = require('../../../lib/utils/ansi-trim')(output[1])
   t.match(out, /semver.*https:\/\/google.com.*\n.*\n.*never triggered/, 'prints package hook')
@@ -199,20 +235,26 @@ t.test('npm hook ls, no results', async t => {
 
   await hook.exec(['ls'])
 
-  t.strictSame(hookArgs, {
-    ...npm.flatOptions,
-    package: undefined,
-  }, 'received the correct arguments')
-  t.equal(output[0], 'You don\'t have any hooks configured yet.', 'prints the correct result')
+  t.match(
+    hookArgs,
+    {
+      ...npm.flatOptions,
+      package: undefined,
+    },
+    'received the correct arguments'
+  )
+  t.equal(output[0], "You don't have any hooks configured yet.", 'prints the correct result')
 })
 
 t.test('npm hook ls, single result', async t => {
-  hookResponse = [{
-    id: 1,
-    name: 'semver',
-    type: 'package',
-    endpoint: 'https://google.com',
-  }]
+  hookResponse = [
+    {
+      id: 1,
+      name: 'semver',
+      type: 'package',
+      endpoint: 'https://google.com',
+    },
+  ]
 
   t.teardown(() => {
     hookResponse = null
@@ -222,10 +264,14 @@ t.test('npm hook ls, single result', async t => {
 
   await hook.exec(['ls'])
 
-  t.strictSame(hookArgs, {
-    ...npm.flatOptions,
-    package: undefined,
-  }, 'received the correct arguments')
+  t.match(
+    hookArgs,
+    {
+      ...npm.flatOptions,
+      package: undefined,
+    },
+    'received the correct arguments'
+  )
   t.equal(output[0], 'You have one hook configured.', 'prints the correct header')
   const out = require('../../../lib/utils/ansi-trim')(output[1])
   t.match(out, /semver.*https:\/\/google.com.*\n.*\n.*never triggered/, 'prints package hook')
@@ -241,27 +287,39 @@ t.test('npm hook ls - json output', async t => {
 
   await hook.exec(['ls'])
 
-  t.strictSame(hookArgs, {
-    ...npm.flatOptions,
-    package: undefined,
-  }, 'received the correct arguments')
+  t.match(
+    hookArgs,
+    {
+      ...npm.flatOptions,
+      package: undefined,
+    },
+    'received the correct arguments'
+  )
   const out = JSON.parse(output[0])
-  t.match(out, [{
-    id: 1,
-    name: 'semver',
-    type: 'package',
-    endpoint: 'https://google.com',
-  }, {
-    id: 2,
-    name: 'npmcli',
-    type: 'scope',
-    endpoint: 'https://google.com',
-  }, {
-    id: 3,
-    name: 'npm',
-    type: 'owner',
-    endpoint: 'https://google.com',
-  }], 'prints the correct output')
+  t.match(
+    out,
+    [
+      {
+        id: 1,
+        name: 'semver',
+        type: 'package',
+        endpoint: 'https://google.com',
+      },
+      {
+        id: 2,
+        name: 'npmcli',
+        type: 'scope',
+        endpoint: 'https://google.com',
+      },
+      {
+        id: 3,
+        name: 'npm',
+        type: 'owner',
+        endpoint: 'https://google.com',
+      },
+    ],
+    'prints the correct output'
+  )
 })
 
 t.test('npm hook ls - parseable output', async t => {
@@ -274,32 +332,44 @@ t.test('npm hook ls - parseable output', async t => {
 
   await hook.exec(['ls'])
 
-  t.strictSame(hookArgs, {
-    ...npm.flatOptions,
-    package: undefined,
-  }, 'received the correct arguments')
-  t.strictSame(output.map(line => line.split(/\t/)), [
-    ['id', 'name', 'type', 'endpoint', 'last_delivery'],
-    ['1', 'semver', 'package', 'https://google.com', ''],
-    ['2', 'npmcli', 'scope', 'https://google.com', `${now}`],
-    ['3', 'npm', 'owner', 'https://google.com', ''],
-  ], 'prints the correct result')
+  t.match(
+    hookArgs,
+    {
+      ...npm.flatOptions,
+      package: undefined,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(
+    output.map(line => line.split(/\t/)),
+    [
+      ['id', 'name', 'type', 'endpoint', 'last_delivery'],
+      ['1', 'semver', 'package', 'https://google.com', ''],
+      ['2', 'npmcli', 'scope', 'https://google.com', `${now}`],
+      ['3', 'npm', 'owner', 'https://google.com', ''],
+    ],
+    'prints the correct result'
+  )
 })
 
 t.test('npm hook ls - silent output', async t => {
-  npm.flatOptions.silent = true
+  npm.config.set('loglevel', 'silent')
   t.teardown(() => {
-    npm.flatOptions.silent = false
+    npm.config.set('loglevel', 'info')
     hookArgs = null
     output.length = 0
   })
 
   await hook.exec(['ls'])
 
-  t.strictSame(hookArgs, {
-    ...npm.flatOptions,
-    package: undefined,
-  }, 'received the correct arguments')
+  t.match(
+    hookArgs,
+    {
+      ...npm.flatOptions,
+      package: undefined,
+    },
+    'received the correct arguments'
+  )
   t.strictSame(output, [], 'printed no output')
 })
 
@@ -311,13 +381,15 @@ t.test('npm hook rm', async t => {
 
   await hook.exec(['rm', '1'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(output, [
-    '- semver  X  https://google.com',
-  ], 'printed the correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(output, ['- semver  X  https://google.com'], 'printed the correct output')
 })
 
 t.test('npm hook rm - unicode output', async t => {
@@ -330,29 +402,35 @@ t.test('npm hook rm - unicode output', async t => {
 
   await hook.exec(['rm', '1'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(output, [
-    '- semver  ✘  https://google.com',
-  ], 'printed the correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(output, ['- semver  ✘  https://google.com'], 'printed the correct output')
 })
 
 t.test('npm hook rm - silent output', async t => {
-  npm.flatOptions.silent = true
+  npm.config.set('loglevel', 'silent')
   t.teardown(() => {
-    npm.flatOptions.silent = false
+    npm.config.set('loglevel', 'info')
     hookArgs = null
     output.length = 0
   })
 
   await hook.exec(['rm', '1'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
   t.strictSame(output, [], 'printed no output')
 })
 
@@ -366,16 +444,24 @@ t.test('npm hook rm - json output', async t => {
 
   await hook.exec(['rm', '1'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(JSON.parse(output[0]), {
-    id: 1,
-    name: 'semver',
-    type: 'package',
-    endpoint: 'https://google.com',
-  }, 'printed correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(
+    JSON.parse(output[0]),
+    {
+      id: 1,
+      name: 'semver',
+      type: 'package',
+      endpoint: 'https://google.com',
+    },
+    'printed correct output'
+  )
 })
 
 t.test('npm hook rm - parseable output', async t => {
@@ -388,14 +474,22 @@ t.test('npm hook rm - parseable output', async t => {
 
   await hook.exec(['rm', '1'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(output.map(line => line.split(/\t/)), [
-    ['id', 'name', 'type', 'endpoint'],
-    ['1', 'semver', 'package', 'https://google.com'],
-  ], 'printed correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(
+    output.map(line => line.split(/\t/)),
+    [
+      ['id', 'name', 'type', 'endpoint'],
+      ['1', 'semver', 'package', 'https://google.com'],
+    ],
+    'printed correct output'
+  )
 })
 
 t.test('npm hook update', async t => {
@@ -406,15 +500,17 @@ t.test('npm hook update', async t => {
 
   await hook.exec(['update', '1', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(output, [
-    '+ semver  ->  https://google.com',
-  ], 'printed the correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(output, ['+ semver  ->  https://google.com'], 'printed the correct output')
 })
 
 t.test('npm hook update - unicode', async t => {
@@ -427,15 +523,17 @@ t.test('npm hook update - unicode', async t => {
 
   await hook.exec(['update', '1', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(output, [
-    '+ semver  ➜  https://google.com',
-  ], 'printed the correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(output, ['+ semver  ➜  https://google.com'], 'printed the correct output')
 })
 
 t.test('npm hook update - json output', async t => {
@@ -448,18 +546,26 @@ t.test('npm hook update - json output', async t => {
 
   await hook.exec(['update', '1', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(JSON.parse(output[0]), {
-    id: '1',
-    name: 'semver',
-    type: 'package',
-    endpoint: 'https://google.com',
-  }, 'printed the correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(
+    JSON.parse(output[0]),
+    {
+      id: '1',
+      name: 'semver',
+      type: 'package',
+      endpoint: 'https://google.com',
+    },
+    'printed the correct output'
+  )
 })
 
 t.test('npm hook update - parseable output', async t => {
@@ -472,33 +578,45 @@ t.test('npm hook update - parseable output', async t => {
 
   await hook.exec(['update', '1', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
-  t.strictSame(output.map(line => line.split(/\t/)), [
-    ['id', 'name', 'type', 'endpoint'],
-    ['1', 'semver', 'package', 'https://google.com'],
-  ], 'printed the correct output')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
+  t.strictSame(
+    output.map(line => line.split(/\t/)),
+    [
+      ['id', 'name', 'type', 'endpoint'],
+      ['1', 'semver', 'package', 'https://google.com'],
+    ],
+    'printed the correct output'
+  )
 })
 
 t.test('npm hook update - silent output', async t => {
-  npm.flatOptions.silent = true
+  npm.config.set('loglevel', 'silent')
   t.teardown(() => {
-    npm.flatOptions.silent = false
+    npm.config.set('loglevel', 'info')
     hookArgs = null
     output.length = 0
   })
 
   await hook.exec(['update', '1', 'https://google.com', 'some-secret'])
 
-  t.strictSame(hookArgs, {
-    id: '1',
-    uri: 'https://google.com',
-    secret: 'some-secret',
-    opts: npm.flatOptions,
-  }, 'received the correct arguments')
+  t.match(
+    hookArgs,
+    {
+      id: '1',
+      uri: 'https://google.com',
+      secret: 'some-secret',
+      opts: npm.flatOptions,
+    },
+    'received the correct arguments'
+  )
   t.strictSame(output, [], 'printed no output')
 })

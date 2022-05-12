@@ -1,26 +1,35 @@
 const t = require('tap')
-const { real: mockNpm } = require('../../fixtures/mock-npm')
+const { load: loadMockNpm } = require('../../fixtures/mock-npm')
+const MockRegistry = require('../../fixtures/mock-registry.js')
 
 const username = 'foo'
-const { joinedOutput, Npm } = mockNpm(t, {
-  '../../lib/utils/get-identity.js': () => Promise.resolve(username),
-})
-const npm = new Npm()
-
-t.before(async () => {
-  await npm.load()
-})
+const auth = { '//registry.npmjs.org/:_authToken': 'test-auth-token' }
 
 t.test('npm whoami', async (t) => {
+  const { npm, joinedOutput } = await loadMockNpm(t, { config: auth })
+  const registry = new MockRegistry({
+    tap: t,
+    registry: npm.config.get('registry'),
+    authorization: 'test-auth-token',
+  })
+  registry.whoami({ username })
   await npm.exec('whoami', [])
   t.equal(joinedOutput(), username, 'should print username')
 })
 
 t.test('npm whoami --json', async (t) => {
-  t.teardown(() => {
-    npm.config.set('json', false)
+  const { npm, joinedOutput } = await loadMockNpm(t, {
+    config: {
+      json: true,
+      ...auth,
+    },
   })
-  npm.config.set('json', true)
+  const registry = new MockRegistry({
+    tap: t,
+    registry: npm.config.get('registry'),
+    authorization: 'test-auth-token',
+  })
+  registry.whoami({ username })
   await npm.exec('whoami', [])
   t.equal(JSON.parse(joinedOutput()), username, 'should print username')
 })

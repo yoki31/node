@@ -99,14 +99,12 @@ const LS = t.mock('../../../lib/commands/ls.js', {
 const config = {
   all: true,
   color: false,
-  dev: false,
   depth: Infinity,
   global: false,
   json: false,
   link: false,
-  only: null,
+  omit: [],
   parseable: false,
-  production: false,
   'package-lock-only': false,
 }
 const flatOptions = {
@@ -122,29 +120,31 @@ const npm = mockNpm({
 const ls = new LS(npm)
 
 const redactCwd = res =>
-  res && res.replace(/\\+/g, '/').replace(new RegExp(__dirname.replace(/\\+/g, '/'), 'gi'), '{CWD}')
+  res &&
+  res.replace(/\\+/g, '/').replace(new RegExp(__dirname.replace(/\\+/g, '/'), 'gi'), '{CWD}')
 
 const redactCwdObj = obj => {
-  if (Array.isArray(obj))
+  if (Array.isArray(obj)) {
     return obj.map(o => redactCwdObj(o))
-  else if (typeof obj === 'string')
+  } else if (typeof obj === 'string') {
     return redactCwd(obj)
-  else if (!obj)
+  } else if (!obj) {
     return obj
-  else if (typeof obj === 'object') {
+  } else if (typeof obj === 'object') {
     return Object.keys(obj).reduce((o, k) => {
       o[k] = redactCwdObj(obj[k])
       return o
     }, {})
-  } else
+  } else {
     return obj
+  }
 }
 
 const jsonParse = res => redactCwdObj(JSON.parse(res))
 
-const cleanUpResult = () => result = ''
+const cleanUpResult = () => (result = '')
 
-t.test('ls', (t) => {
+t.test('ls', t => {
   t.beforeEach(cleanUpResult)
   config.json = false
   config.unicode = false
@@ -161,7 +161,10 @@ t.test('ls', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree representation of dependencies structure')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree representation of dependencies structure'
+    )
   })
 
   t.test('missing package.json', async t => {
@@ -169,7 +172,10 @@ t.test('ls', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree missing name/version of top-level package')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree missing name/version of top-level package'
+    )
   })
 
   t.test('extraneous deps', async t => {
@@ -201,7 +207,10 @@ t.test('ls', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec(['chai'])
-    t.matchSnapshot(redactCwd(result), 'should output tree contaning only occurrences of filtered by package and colored output')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree contaning only occurrences of filtered by package and colored output'
+    )
     npm.color = false
   })
 
@@ -220,7 +229,10 @@ t.test('ls', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec(['.'])
-    t.matchSnapshot(redactCwd(result), 'should output tree contaning only occurrences of filtered by package and colored output')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree contaning only occurrences of filtered by package and colored output'
+    )
     config.all = true
     config.depth = Infinity
     process.exitCode = 0
@@ -239,7 +251,10 @@ t.test('ls', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec(['dog'])
-    t.matchSnapshot(redactCwd(result), 'should output tree contaning only occurrences of filtered package and its ancestors')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree contaning only occurrences of filtered package and its ancestors'
+    )
   })
 
   t.test('with multiple filter args', async t => {
@@ -264,7 +279,11 @@ t.test('ls', (t) => {
       },
     })
     await ls.exec(['dog@*', 'chai@1.0.0'])
-    t.matchSnapshot(redactCwd(result), 'should output tree contaning only occurrences of multiple filtered packages and their ancestors')
+    t.matchSnapshot(
+      redactCwd(result),
+      /* eslint-disable-next-line max-len */
+      'should output tree contaning only occurrences of multiple filtered packages and their ancestors'
+    )
   })
 
   t.test('with missing filter arg', async t => {
@@ -281,11 +300,7 @@ t.test('ls', (t) => {
     })
     await ls.exec(['notadep'])
     t.matchSnapshot(redactCwd(result), 'should output tree containing no dependencies info')
-    t.equal(
-      process.exitCode,
-      1,
-      'should exit with error code 1'
-    )
+    t.equal(process.exitCode, 1, 'should exit with error code 1')
     process.exitCode = 0
   })
 
@@ -382,7 +397,10 @@ t.test('ls', (t) => {
       },
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing top-level deps and their deps only')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree containing top-level deps and their deps only'
+    )
     config.all = true
     config.depth = Infinity
   })
@@ -404,13 +422,17 @@ t.test('ls', (t) => {
       t.equal(err.code, 'ELSPROBLEMS', 'should have error code')
       t.equal(
         redactCwd(err.message).replace(/\r\n/g, '\n'),
+        /* eslint-disable-next-line max-len */
         'extraneous: chai@1.0.0 {CWD}/tap-testdir-ls-ls-missing-invalid-extraneous/node_modules/chai\n' +
         'invalid: foo@1.0.0 {CWD}/tap-testdir-ls-ls-missing-invalid-extraneous/node_modules/foo\n' +
         'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
         'should log missing/invalid/extraneous errors'
       )
     })
-    t.matchSnapshot(redactCwd(result), 'should output tree containing missing, invalid, extraneous labels')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree containing missing, invalid, extraneous labels'
+    )
   })
 
   t.test('colored output', async t => {
@@ -426,17 +448,13 @@ t.test('ls', (t) => {
       }),
       ...simpleNmFixture,
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' },
-      'should have error code'
-    )
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'should have error code')
     t.matchSnapshot(redactCwd(result), 'should output tree containing color info')
     npm.color = false
   })
 
   t.test('--dev', async t => {
-    config.dev = true
+    flatOptions.omit = ['peer', 'prod', 'optional']
     npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'test-npm-ls',
@@ -459,34 +477,7 @@ t.test('ls', (t) => {
     })
     await ls.exec([])
     t.matchSnapshot(redactCwd(result), 'should output tree containing dev deps')
-    config.dev = false
-  })
-
-  t.test('--only=development', async t => {
-    config.only = 'development'
-    npm.prefix = t.testdir({
-      'package.json': JSON.stringify({
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'prod-dep': '^1.0.0',
-          chai: '^1.0.0',
-        },
-        devDependencies: {
-          'dev-dep': '^1.0.0',
-        },
-        optionalDependencies: {
-          'optional-dep': '^1.0.0',
-        },
-        peerDependencies: {
-          'peer-dep': '^1.0.0',
-        },
-      }),
-      ...diffDepTypesNmFixture,
-    })
-    await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing only development deps')
-    config.only = null
+    flatOptions.omit = []
   })
 
   t.test('--link', async t => {
@@ -561,7 +552,7 @@ t.test('ls', (t) => {
   })
 
   t.test('--production', async t => {
-    config.production = true
+    flatOptions.omit = ['dev', 'peer']
     npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'test-npm-ls',
@@ -584,34 +575,7 @@ t.test('ls', (t) => {
     })
     await ls.exec([])
     t.matchSnapshot(redactCwd(result), 'should output tree containing production deps')
-    config.production = false
-  })
-
-  t.test('--only=prod', async t => {
-    config.only = 'prod'
-    npm.prefix = t.testdir({
-      'package.json': JSON.stringify({
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'prod-dep': '^1.0.0',
-          chai: '^1.0.0',
-        },
-        devDependencies: {
-          'dev-dep': '^1.0.0',
-        },
-        optionalDependencies: {
-          'optional-dep': '^1.0.0',
-        },
-        peerDependencies: {
-          'peer-dep': '^1.0.0',
-        },
-      }),
-      ...diffDepTypesNmFixture,
-    })
-    await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing only prod deps')
-    config.only = null
+    flatOptions.omit = []
   })
 
   t.test('--long', async t => {
@@ -666,7 +630,10 @@ t.test('ls', (t) => {
       ...diffDepTypesNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing top-level deps with descriptions')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree containing top-level deps with descriptions'
+    )
     config.all = true
     config.depth = Infinity
     config.long = false
@@ -676,11 +643,7 @@ t.test('ls', (t) => {
     npm.prefix = t.testdir({
       'package.json': '{broken json',
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'EJSONPARSE' },
-      'should throw EJSONPARSE error'
-    )
+    await t.rejects(ls.exec([]), { code: 'EJSONPARSE' }, 'should throw EJSONPARSE error')
     t.matchSnapshot(redactCwd(result), 'should print empty result')
   })
 
@@ -712,7 +675,10 @@ t.test('ls', (t) => {
       ...diffDepTypesNmFixture,
     })
     await t.rejects(ls.exec([]))
-    t.matchSnapshot(redactCwd(result), 'should output tree signaling mismatching peer dep in problems')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree signaling mismatching peer dep in problems'
+    )
   })
 
   t.test('invalid deduped dep', async t => {
@@ -745,7 +711,10 @@ t.test('ls', (t) => {
       },
     })
     await t.rejects(ls.exec([]))
-    t.matchSnapshot(redactCwd(result), 'should output tree signaling mismatching peer dep in problems')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree signaling mismatching peer dep in problems'
+    )
     npm.color = false
   })
 
@@ -776,7 +745,10 @@ t.test('ls', (t) => {
       { code: 'ELSPROBLEMS', message: /missing: b@\^1.0.0/ },
       'should list missing dep problem'
     )
-    t.matchSnapshot(redactCwd(result), 'should output parseable signaling missing peer dep in problems')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable signaling missing peer dep in problems'
+    )
   })
 
   t.test('unmet peer dep', async t => {
@@ -825,7 +797,10 @@ t.test('ls', (t) => {
       { code: 'ELSPROBLEMS', message: /invalid: optional-dep@1.0.0/ },
       'should have invalid dep error msg'
     )
-    t.matchSnapshot(redactCwd(result), 'should output tree with empty entry for missing optional deps')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree with empty entry for missing optional deps'
+    )
     npm.color = false
   })
 
@@ -1138,6 +1113,7 @@ t.test('ls', (t) => {
               name: 'abbrev',
               version: '1.1.1',
               from: 'git+https://github.com/isaacs/abbrev-js.git',
+              /* eslint-disable-next-line max-len */
               resolved: 'git+https://github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             },
           },
@@ -1148,6 +1124,7 @@ t.test('ls', (t) => {
             version: '1.1.1',
             _id: 'abbrev@1.1.1',
             _from: 'git+https://github.com/isaacs/abbrev-js.git',
+            /* eslint-disable-next-line max-len */
             _resolved: 'git+https://github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             _requested: {
               type: 'git',
@@ -1191,6 +1168,7 @@ t.test('ls', (t) => {
           a: {
             version: '1.0.1',
             resolved: 'foo@dog://b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
+            /* eslint-disable-next-line max-len */
             integrity: 'sha512-8AN9lNCcBt5Xeje7fMEEpp5K3rgcAzIpTtAjYb/YMUYu8SbIVF6wz0WqACDVKvpQOUcSfNHZQNLNmue0QSwXOQ==',
           },
         },
@@ -1244,10 +1222,7 @@ t.test('ls', (t) => {
               saveSpec: null,
               fetchSpec: 'latest',
             },
-            _requiredBy: [
-              '#USER',
-              '/',
-            ],
+            _requiredBy: ['#USER', '/'],
             _shasum: '3c07708ec9ef3e3c985cf0ddd67df09ab8ec2abc',
             _spec: 'simple-output',
           }),
@@ -1341,20 +1316,19 @@ t.test('ls', (t) => {
     })
 
     await ls.exec(['c'])
-    t.matchSnapshot(redactCwd(result), 'should print tree and not duplicate child of missing items')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should print tree and not duplicate child of missing items'
+    )
   })
 
-  t.test('loading a tree containing workspaces', async (t) => {
+  t.test('loading a tree containing workspaces', async t => {
     npm.localPrefix = npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'workspaces-tree',
         version: '1.0.0',
-        workspaces: [
-          './a',
-          './b',
-          './d',
-          './group/*',
-        ],
+        workspaces: ['./a', './b', './d', './group/*'],
+        dependencies: { pacote: '1.0.0' },
       }),
       node_modules: {
         a: t.fixture('symlink', '../a'),
@@ -1382,6 +1356,9 @@ t.test('ls', (t) => {
         },
         baz: {
           'package.json': JSON.stringify({ name: 'baz', version: '1.0.0' }),
+        },
+        pacote: {
+          'package.json': JSON.stringify({ name: 'pacote', version: '1.0.0' }),
         },
       },
       a: {
@@ -1432,16 +1409,15 @@ t.test('ls', (t) => {
     config.depth = 0
     npm.color = true
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result),
-      'should list workspaces properly with default configs')
+    t.matchSnapshot(redactCwd(result), 'should list workspaces properly with default configs')
 
     config.all = false
     config.depth = 0
     npm.color = true
     npm.flatOptions.workspacesEnabled = false
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result),
-      'should not list workspaces with --no-workspaces')
+    t.matchSnapshot(redactCwd(result), 'should not list workspaces with --no-workspaces')
+
     config.all = true
     config.depth = Infinity
     npm.color = false
@@ -1449,17 +1425,15 @@ t.test('ls', (t) => {
 
     // --all
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result),
-      'should list --all workspaces properly')
+    t.matchSnapshot(redactCwd(result), 'should list --all workspaces properly')
 
     // --production
-    config.production = true
+    flatOptions.omit = ['dev', 'peer', 'optional']
     await ls.exec([])
 
-    t.matchSnapshot(redactCwd(result),
-      'should list only prod deps of workspaces')
+    t.matchSnapshot(redactCwd(result), 'should list only prod deps of workspaces')
 
-    config.production = false
+    flatOptions.omit = []
 
     // filter out a single workspace using args
     await ls.exec(['d'])
@@ -1468,20 +1442,26 @@ t.test('ls', (t) => {
     // filter out a single workspace and its deps using workspaces filters
     await ls.execWorkspaces([], ['a'])
 
-    t.matchSnapshot(redactCwd(result),
-      'should filter using workspace config')
+    t.matchSnapshot(redactCwd(result), 'should filter using workspace config')
+
+    // filter out a single workspace and include root
+    npm.flatOptions.includeWorkspaceRoot = true
+    await ls.execWorkspaces([], ['d'])
+    t.matchSnapshot(redactCwd(result), 'should inlude root and specified workspace')
+    npm.flatOptions.includeWorkspaceRoot = false
 
     // filter out a workspace by parent path
     await ls.execWorkspaces([], ['./group'])
 
-    t.matchSnapshot(redactCwd(result),
-      'should filter by parent folder workspace config')
+    t.matchSnapshot(redactCwd(result), 'should filter by parent folder workspace config')
 
     // filter by a dep within a workspaces sub tree
     await ls.execWorkspaces(['bar'], ['d'])
 
-    t.matchSnapshot(redactCwd(result),
-      'should print all tree and filter by dep within only the ws subtree')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should print all tree and filter by dep within only the ws subtree'
+    )
   })
 
   t.test('filter pkg arg using depth option', async t => {
@@ -1553,7 +1533,7 @@ t.test('ls', (t) => {
   t.end()
 })
 
-t.test('ls --parseable', (t) => {
+t.test('ls --parseable', t => {
   t.beforeEach(cleanUpResult)
   config.json = false
   config.unicode = false
@@ -1571,7 +1551,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output parseable representation of dependencies structure')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable representation of dependencies structure'
+    )
   })
 
   t.test('missing package.json', async t => {
@@ -1579,7 +1562,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output parseable missing name/version of top-level package')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable missing name/version of top-level package'
+    )
   })
 
   t.test('extraneous deps', async t => {
@@ -1610,7 +1596,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec(['chai'])
-    t.matchSnapshot(redactCwd(result), 'should output parseable contaning only occurrences of filtered by package')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable contaning only occurrences of filtered by package'
+    )
   })
 
   t.test('with filter arg nested dep', async t => {
@@ -1626,7 +1615,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec(['dog'])
-    t.matchSnapshot(redactCwd(result), 'should output parseable contaning only occurrences of filtered package')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable contaning only occurrences of filtered package'
+    )
   })
 
   t.test('with multiple filter args', async t => {
@@ -1651,7 +1643,11 @@ t.test('ls --parseable', (t) => {
       },
     })
     await ls.exec(['dog@*', 'chai@1.0.0'])
-    t.matchSnapshot(redactCwd(result), 'should output parseable contaning only occurrences of multiple filtered packages and their ancestors')
+    t.matchSnapshot(
+      redactCwd(result),
+      /* eslint-disable-next-line max-len */
+      'should output parseable contaning only occurrences of multiple filtered packages and their ancestors'
+    )
   })
 
   t.test('with missing filter arg', async t => {
@@ -1667,7 +1663,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec(['notadep'])
-    t.matchSnapshot(redactCwd(result), 'should output parseable output containing no dependencies info')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable output containing no dependencies info'
+    )
   })
 
   t.test('default --depth value should be 0', async t => {
@@ -1685,7 +1684,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output parseable output containing only top-level dependencies')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable output containing only top-level dependencies'
+    )
     config.all = true
     config.depth = Infinity
   })
@@ -1725,7 +1727,10 @@ t.test('ls --parseable', (t) => {
       ...simpleNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output parseable containing top-level deps and their deps only')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable containing top-level deps and their deps only'
+    )
     config.all = true
     config.depth = Infinity
   })
@@ -1742,16 +1747,15 @@ t.test('ls --parseable', (t) => {
       }),
       ...simpleNmFixture,
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' },
-      'should list dep problems'
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'should list dep problems')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable containing top-level deps and their deps only'
     )
-    t.matchSnapshot(redactCwd(result), 'should output parseable containing top-level deps and their deps only')
   })
 
   t.test('--dev', async t => {
-    config.dev = true
+    flatOptions.omit = ['peer', 'prod', 'optional']
     npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'test-npm-ls',
@@ -1774,34 +1778,7 @@ t.test('ls --parseable', (t) => {
     })
     await ls.exec([])
     t.matchSnapshot(redactCwd(result), 'should output tree containing dev deps')
-    config.dev = false
-  })
-
-  t.test('--only=development', async t => {
-    config.only = 'development'
-    npm.prefix = t.testdir({
-      'package.json': JSON.stringify({
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'prod-dep': '^1.0.0',
-          chai: '^1.0.0',
-        },
-        devDependencies: {
-          'dev-dep': '^1.0.0',
-        },
-        optionalDependencies: {
-          'optional-dep': '^1.0.0',
-        },
-        peerDependencies: {
-          'peer-dep': '^1.0.0',
-        },
-      }),
-      ...diffDepTypesNmFixture,
-    })
-    await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing only development deps')
-    config.only = null
+    flatOptions.omit = []
   })
 
   t.test('--link', async t => {
@@ -1842,7 +1819,7 @@ t.test('ls --parseable', (t) => {
   })
 
   t.test('--production', async t => {
-    config.production = true
+    flatOptions.omit = ['dev', 'peer']
     npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'test-npm-ls',
@@ -1865,34 +1842,7 @@ t.test('ls --parseable', (t) => {
     })
     await ls.exec([])
     t.matchSnapshot(redactCwd(result), 'should output tree containing production deps')
-    config.production = false
-  })
-
-  t.test('--only=prod', async t => {
-    config.only = 'prod'
-    npm.prefix = t.testdir({
-      'package.json': JSON.stringify({
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'prod-dep': '^1.0.0',
-          chai: '^1.0.0',
-        },
-        devDependencies: {
-          'dev-dep': '^1.0.0',
-        },
-        optionalDependencies: {
-          'optional-dep': '^1.0.0',
-        },
-        peerDependencies: {
-          'peer-dep': '^1.0.0',
-        },
-      }),
-      ...diffDepTypesNmFixture,
-    })
-    await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing only prod deps')
-    config.only = null
+    flatOptions.omit = []
   })
 
   t.test('--long', async t => {
@@ -1950,12 +1900,11 @@ t.test('ls --parseable', (t) => {
       }),
       ...simpleNmFixture,
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' },
-      'should list dep problems'
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'should list dep problems')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable result containing EXTRANEOUS/INVALID labels'
     )
-    t.matchSnapshot(redactCwd(result), 'should output parseable result containing EXTRANEOUS/INVALID labels')
     config.long = false
   })
 
@@ -2021,7 +1970,10 @@ t.test('ls --parseable', (t) => {
       ...diffDepTypesNmFixture,
     })
     await ls.exec([])
-    t.matchSnapshot(redactCwd(result), 'should output tree containing top-level deps with descriptions')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output tree containing top-level deps with descriptions'
+    )
     config.all = true
     config.depth = Infinity
     config.long = false
@@ -2031,10 +1983,7 @@ t.test('ls --parseable', (t) => {
     npm.prefix = t.testdir({
       'package.json': '{broken json',
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'EJSONPARSE' },
-      'should throw EJSONPARSE error')
+    await t.rejects(ls.exec([]), { code: 'EJSONPARSE' }, 'should throw EJSONPARSE error')
     t.matchSnapshot(redactCwd(result), 'should print empty result')
   })
 
@@ -2066,7 +2015,10 @@ t.test('ls --parseable', (t) => {
       ...diffDepTypesNmFixture,
     })
     await t.rejects(ls.exec([]))
-    t.matchSnapshot(redactCwd(result), 'should output parseable signaling missing peer dep in problems')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable signaling missing peer dep in problems'
+    )
   })
 
   t.test('unmet optional dep', async t => {
@@ -2096,7 +2048,10 @@ t.test('ls --parseable', (t) => {
       { code: 'ELSPROBLEMS', message: /invalid: optional-dep@1.0.0/ },
       'should have invalid dep error msg'
     )
-    t.matchSnapshot(redactCwd(result), 'should output parseable with empty entry for missing optional deps')
+    t.matchSnapshot(
+      redactCwd(result),
+      'should output parseable with empty entry for missing optional deps'
+    )
   })
 
   t.test('cycle deps', async t => {
@@ -2185,6 +2140,7 @@ t.test('ls --parseable', (t) => {
             'node_modules/abbrev': {
               name: 'abbrev',
               version: '1.1.1',
+              /* eslint-disable-next-line max-len */
               resolved: 'git+https://github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             },
           },
@@ -2195,6 +2151,7 @@ t.test('ls --parseable', (t) => {
             version: '1.1.1',
             _id: 'abbrev@1.1.1',
             _from: 'git+https://github.com/isaacs/abbrev-js.git',
+            /* eslint-disable-next-line max-len */
             _resolved: 'git+https://github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             _requested: {
               type: 'git',
@@ -2250,10 +2207,7 @@ t.test('ls --parseable', (t) => {
               saveSpec: null,
               fetchSpec: 'latest',
             },
-            _requiredBy: [
-              '#USER',
-              '/',
-            ],
+            _requiredBy: ['#USER', '/'],
             _shasum: '3c07708ec9ef3e3c985cf0ddd67df09ab8ec2abc',
             _spec: 'simple-output',
           }),
@@ -2342,44 +2296,40 @@ t.test('ignore missing optional deps', async t => {
     }),
     node_modules: {
       'prod-ok': {
-        'package.json': JSON.stringify({name: 'prod-ok', version: '1.2.3' }),
+        'package.json': JSON.stringify({ name: 'prod-ok', version: '1.2.3' }),
       },
       'prod-wrong': {
-        'package.json': JSON.stringify({name: 'prod-wrong', version: '3.2.1' }),
+        'package.json': JSON.stringify({ name: 'prod-wrong', version: '3.2.1' }),
       },
       'optional-ok': {
-        'package.json': JSON.stringify({name: 'optional-ok', version: '1.2.3' }),
+        'package.json': JSON.stringify({ name: 'optional-ok', version: '1.2.3' }),
       },
       'optional-wrong': {
-        'package.json': JSON.stringify({name: 'optional-wrong', version: '3.2.1' }),
+        'package.json': JSON.stringify({ name: 'optional-wrong', version: '3.2.1' }),
       },
       'peer-optional-ok': {
-        'package.json': JSON.stringify({name: 'peer-optional-ok', version: '1.2.3' }),
+        'package.json': JSON.stringify({ name: 'peer-optional-ok', version: '1.2.3' }),
       },
       'peer-optional-wrong': {
-        'package.json': JSON.stringify({name: 'peer-optional-wrong', version: '3.2.1' }),
+        'package.json': JSON.stringify({ name: 'peer-optional-wrong', version: '3.2.1' }),
       },
       'peer-ok': {
-        'package.json': JSON.stringify({name: 'peer-ok', version: '1.2.3' }),
+        'package.json': JSON.stringify({ name: 'peer-ok', version: '1.2.3' }),
       },
       'peer-wrong': {
-        'package.json': JSON.stringify({name: 'peer-wrong', version: '3.2.1' }),
+        'package.json': JSON.stringify({ name: 'peer-wrong', version: '3.2.1' }),
       },
     },
   })
 
   config.all = true
   const prefix = npm.prefix.toLowerCase().replace(/\\/g, '/')
-  const cleanupPaths = str =>
-    str.toLowerCase().replace(/\\/g, '/').split(prefix).join('{project}')
+  const cleanupPaths = str => str.toLowerCase().replace(/\\/g, '/').split(prefix).join('{project}')
 
   t.test('--json', async t => {
     config.json = true
     config.parseable = false
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' }
-    )
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' })
     result = JSON.parse(result)
     const problems = result.problems.map(cleanupPaths)
     t.matchSnapshot(problems, 'ls --json problems')
@@ -2388,25 +2338,19 @@ t.test('ignore missing optional deps', async t => {
   t.test('--parseable', async t => {
     config.json = false
     config.parseable = true
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' }
-    )
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' })
     t.matchSnapshot(cleanupPaths(result), 'ls --parseable result')
   })
 
   t.test('human output', async t => {
     config.json = false
     config.parseable = false
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' }
-    )
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' })
     t.matchSnapshot(cleanupPaths(result), 'ls result')
   })
 })
 
-t.test('ls --json', (t) => {
+t.test('ls --json', t => {
   t.beforeEach(cleanUpResult)
   config.json = true
   config.parseable = false
@@ -2455,8 +2399,11 @@ t.test('ls --json', (t) => {
       jsonParse(result),
       {
         problems: [
+          /* eslint-disable-next-line max-len */
           'extraneous: chai@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-package.json/node_modules/chai',
+          /* eslint-disable-next-line max-len */
           'extraneous: dog@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-package.json/node_modules/dog',
+          /* eslint-disable-next-line max-len */
           'extraneous: foo@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-package.json/node_modules/foo',
         ],
         dependencies: {
@@ -2464,6 +2411,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             extraneous: true,
             problems: [
+              /* eslint-disable-next-line max-len */
               'extraneous: dog@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-package.json/node_modules/dog',
             ],
           },
@@ -2471,6 +2419,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             extraneous: true,
             problems: [
+              /* eslint-disable-next-line max-len */
               'extraneous: foo@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-package.json/node_modules/foo',
             ],
             dependencies: {
@@ -2483,6 +2432,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             extraneous: true,
             problems: [
+              /* eslint-disable-next-line max-len */
               'extraneous: chai@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-package.json/node_modules/chai',
             ],
           },
@@ -2525,6 +2475,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             extraneous: true,
             problems: [
+              /* eslint-disable-next-line max-len */
               'extraneous: chai@1.0.0 {CWD}/tap-testdir-ls-ls---json-extraneous-deps/node_modules/chai',
             ],
           },
@@ -2557,20 +2508,14 @@ t.test('ls --json', (t) => {
         'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
         'should log missing dep as error'
       )
-      t.equal(
-        err.code,
-        'ELSPROBLEMS',
-        'should have ELSPROBLEMS error code'
-      )
+      t.equal(err.code, 'ELSPROBLEMS', 'should have ELSPROBLEMS error code')
     })
     t.match(
       jsonParse(result),
       {
         name: 'test-npm-ls',
         version: '1.0.0',
-        problems: [
-          'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
-        ],
+        problems: ['missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0'],
       },
       'should output json containing problems info'
     )
@@ -2603,11 +2548,7 @@ t.test('ls --json', (t) => {
       },
       'should output json contaning only occurrences of filtered by package'
     )
-    t.not(
-      process.exitCode,
-      1,
-      'should not exit with error code 1'
-    )
+    t.not(process.exitCode, 1, 'should not exit with error code 1')
   })
 
   t.test('with filter arg nested dep', async t => {
@@ -2685,6 +2626,7 @@ t.test('ls --json', (t) => {
           },
         },
       },
+      /* eslint-disable-next-line max-len */
       'should output json contaning only occurrences of multiple filtered packages and their ancestors'
     )
   })
@@ -2710,11 +2652,7 @@ t.test('ls --json', (t) => {
       },
       'should output json containing no dependencies info'
     )
-    t.equal(
-      process.exitCode,
-      1,
-      'should exit with error code 1'
-    )
+    t.equal(process.exitCode, 1, 'should exit with error code 1')
     process.exitCode = 0
   })
 
@@ -2840,18 +2778,16 @@ t.test('ls --json', (t) => {
       }),
       ...simpleNmFixture,
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' },
-      'should list dep problems'
-    )
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'should list dep problems')
     t.same(
       jsonParse(result),
       {
         name: 'test-npm-ls',
         version: '1.0.0',
         problems: [
+          /* eslint-disable-next-line max-len */
           'extraneous: chai@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-invalid-extraneous/node_modules/chai',
+          /* eslint-disable-next-line max-len */
           'invalid: foo@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-invalid-extraneous/node_modules/foo',
           'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
         ],
@@ -2860,6 +2796,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             invalid: '"^2.0.0" from the root project',
             problems: [
+              /* eslint-disable-next-line max-len */
               'invalid: foo@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-invalid-extraneous/node_modules/foo',
             ],
             dependencies: {
@@ -2872,15 +2809,14 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             extraneous: true,
             problems: [
+              /* eslint-disable-next-line max-len */
               'extraneous: chai@1.0.0 {CWD}/tap-testdir-ls-ls---json-missing-invalid-extraneous/node_modules/chai',
             ],
           },
           ipsum: {
             required: '^1.0.0',
             missing: true,
-            problems: [
-              'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
-            ],
+            problems: ['missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0'],
           },
         },
       },
@@ -2889,7 +2825,7 @@ t.test('ls --json', (t) => {
   })
 
   t.test('--dev', async t => {
-    config.dev = true
+    flatOptions.omit = ['prod', 'optional', 'peer']
     npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'test-npm-ls',
@@ -2930,52 +2866,7 @@ t.test('ls --json', (t) => {
       },
       'should output json containing dev deps'
     )
-    config.dev = false
-  })
-
-  t.test('--only=development', async t => {
-    config.only = 'development'
-    npm.prefix = t.testdir({
-      'package.json': JSON.stringify({
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'prod-dep': '^1.0.0',
-          chai: '^1.0.0',
-        },
-        devDependencies: {
-          'dev-dep': '^1.0.0',
-        },
-        optionalDependencies: {
-          'optional-dep': '^1.0.0',
-        },
-        peerDependencies: {
-          'peer-dep': '^1.0.0',
-        },
-      }),
-      ...diffDepTypesNmFixture,
-    })
-    await ls.exec([])
-    t.same(
-      jsonParse(result),
-      {
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'dev-dep': {
-            version: '1.0.0',
-            dependencies: {
-              foo: {
-                version: '1.0.0',
-                dependencies: { dog: { version: '1.0.0' } },
-              },
-            },
-          },
-        },
-      },
-      'should output json containing only development deps'
-    )
-    config.only = null
+    flatOptions.omit = []
   })
 
   t.test('--link', async t => {
@@ -3029,7 +2920,7 @@ t.test('ls --json', (t) => {
   })
 
   t.test('--production', async t => {
-    config.production = true
+    flatOptions.omit = ['dev', 'peer']
     npm.prefix = t.testdir({
       'package.json': JSON.stringify({
         name: 'test-npm-ls',
@@ -3064,46 +2955,7 @@ t.test('ls --json', (t) => {
       },
       'should output json containing production deps'
     )
-    config.production = false
-  })
-
-  t.test('--only=prod', async t => {
-    config.only = 'prod'
-    npm.prefix = t.testdir({
-      'package.json': JSON.stringify({
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          'prod-dep': '^1.0.0',
-          chai: '^1.0.0',
-        },
-        devDependencies: {
-          'dev-dep': '^1.0.0',
-        },
-        optionalDependencies: {
-          'optional-dep': '^1.0.0',
-        },
-        peerDependencies: {
-          'peer-dep': '^1.0.0',
-        },
-      }),
-      ...diffDepTypesNmFixture,
-    })
-    await ls.exec([])
-    t.same(
-      jsonParse(result),
-      {
-        name: 'test-npm-ls',
-        version: '1.0.0',
-        dependencies: {
-          chai: { version: '1.0.0' },
-          'optional-dep': { version: '1.0.0' },
-          'prod-dep': { version: '1.0.0', dependencies: { dog: { version: '2.0.0' } } },
-        },
-      },
-      'should output json containing only prod deps'
-    )
-    config.only = null
+    flatOptions.omit = []
   })
 
   t.test('from lockfile', async t => {
@@ -3149,7 +3001,9 @@ t.test('ls --json', (t) => {
           'node_modules/@isaacs/dedupe-tests-a': {
             name: '@isaacs/dedupe-tests-a',
             version: '1.0.1',
+            /* eslint-disable-next-line max-len */
             resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
+            /* eslint-disable-next-line max-len */
             integrity: 'sha512-8AN9lNCcBt5Xeje7fMEEpp5K3rgcAzIpTtAjYb/YMUYu8SbIVF6wz0WqACDVKvpQOUcSfNHZQNLNmue0QSwXOQ==',
             dependencies: {
               '@isaacs/dedupe-tests-b': '1',
@@ -3158,20 +3012,26 @@ t.test('ls --json', (t) => {
           'node_modules/@isaacs/dedupe-tests-a/node_modules/@isaacs/dedupe-tests-b': {
             name: '@isaacs/dedupe-tests-b',
             version: '1.0.0',
+            /* eslint-disable-next-line max-len */
             resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
+            /* eslint-disable-next-line max-len */
             integrity: 'sha512-3nmvzIb8QL8OXODzipwoV3U8h9OQD9g9RwOPuSBQqjqSg9JZR1CCFOWNsDUtOfmwY8HFUJV9EAZ124uhqVxq+w==',
           },
           'node_modules/@isaacs/dedupe-tests-b': {
             name: '@isaacs/dedupe-tests-b',
             version: '2.0.0',
+            /* eslint-disable-next-line max-len */
             resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
+            /* eslint-disable-next-line max-len */
             integrity: 'sha512-KTYkpRv9EzlmCg4Gsm/jpclWmRYFCXow8GZKJXjK08sIZBlElTZEa5Bw/UQxIvEfcKmWXczSqItD49Kr8Ax4UA==',
           },
         },
         dependencies: {
           '@isaacs/dedupe-tests-a': {
             version: '1.0.1',
+            /* eslint-disable-next-line max-len */
             resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
+            /* eslint-disable-next-line max-len */
             integrity: 'sha512-8AN9lNCcBt5Xeje7fMEEpp5K3rgcAzIpTtAjYb/YMUYu8SbIVF6wz0WqACDVKvpQOUcSfNHZQNLNmue0QSwXOQ==',
             requires: {
               '@isaacs/dedupe-tests-b': '1',
@@ -3179,14 +3039,18 @@ t.test('ls --json', (t) => {
             dependencies: {
               '@isaacs/dedupe-tests-b': {
                 version: '1.0.0',
+                /* eslint-disable-next-line max-len */
                 resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
+                /* eslint-disable-next-line max-len */
                 integrity: 'sha512-3nmvzIb8QL8OXODzipwoV3U8h9OQD9g9RwOPuSBQqjqSg9JZR1CCFOWNsDUtOfmwY8HFUJV9EAZ124uhqVxq+w==',
               },
             },
           },
           '@isaacs/dedupe-tests-b': {
             version: '2.0.0',
+            /* eslint-disable-next-line max-len */
             resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
+            /* eslint-disable-next-line max-len */
             integrity: 'sha512-KTYkpRv9EzlmCg4Gsm/jpclWmRYFCXow8GZKJXjK08sIZBlElTZEa5Bw/UQxIvEfcKmWXczSqItD49Kr8Ax4UA==',
           },
         },
@@ -3209,12 +3073,15 @@ t.test('ls --json', (t) => {
         dependencies: {
           '@isaacs/dedupe-tests-a': {
             version: '1.0.1',
-            resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
+            resolved:
+              'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
             dependencies: {
               '@isaacs/dedupe-tests-b': {
-                resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
+                resolved:
+                  'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
                 extraneous: true,
                 problems: [
+                  /* eslint-disable-next-line max-len */
                   'extraneous: @isaacs/dedupe-tests-b@ {CWD}/tap-testdir-ls-ls---json-from-lockfile/node_modules/@isaacs/dedupe-tests-a/node_modules/@isaacs/dedupe-tests-b',
                 ],
               },
@@ -3222,10 +3089,12 @@ t.test('ls --json', (t) => {
           },
           '@isaacs/dedupe-tests-b': {
             version: '2.0.0',
-            resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
+            resolved:
+              'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
           },
         },
         problems: [
+          /* eslint-disable-next-line max-len */
           'extraneous: @isaacs/dedupe-tests-b@ {CWD}/tap-testdir-ls-ls---json-from-lockfile/node_modules/@isaacs/dedupe-tests-a/node_modules/@isaacs/dedupe-tests-b',
         ],
       },
@@ -3342,6 +3211,7 @@ t.test('ls --json', (t) => {
                 devDependencies: {},
                 peerDependencies: {},
                 _dependencies: {},
+                /* eslint-disable-next-line max-len */
                 path: '{CWD}/tap-testdir-ls-ls---json---long/node_modules/prod-dep/node_modules/dog',
                 extraneous: false,
               },
@@ -3482,6 +3352,7 @@ t.test('ls --json', (t) => {
       {
         invalid: true,
         problems: [
+          /* eslint-disable-next-line max-len */
           'error in {CWD}/tap-testdir-ls-ls---json-json-read-problems: Failed to parse root package.json',
         ],
       },
@@ -3489,14 +3360,10 @@ t.test('ls --json', (t) => {
     )
   })
 
-  t.test('empty location', async (t) => {
+  t.test('empty location', async t => {
     npm.prefix = t.testdir({})
     await ls.exec([])
-    t.same(
-      jsonParse(result),
-      {},
-      'should print empty json result'
-    )
+    t.same(jsonParse(result), {}, 'should print empty json result')
   })
 
   t.test('unmet peer dep', async t => {
@@ -3520,17 +3387,14 @@ t.test('ls --json', (t) => {
       }),
       ...diffDepTypesNmFixture,
     })
-    await t.rejects(
-      ls.exec([]),
-      { code: 'ELSPROBLEMS' },
-      'Should have ELSPROBLEMS error code'
-    )
+    await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'Should have ELSPROBLEMS error code')
     t.same(
       jsonParse(result),
       {
         name: 'test-npm-ls',
         version: '1.0.0',
         problems: [
+          /* eslint-disable-next-line max-len */
           'invalid: peer-dep@1.0.0 {CWD}/tap-testdir-ls-ls---json-unmet-peer-dep/node_modules/peer-dep',
         ],
         dependencies: {
@@ -3538,6 +3402,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             invalid: '"^2.0.0" from the root project',
             problems: [
+              /* eslint-disable-next-line max-len */
               'invalid: peer-dep@1.0.0 {CWD}/tap-testdir-ls-ls---json-unmet-peer-dep/node_modules/peer-dep',
             ],
           },
@@ -3592,6 +3457,7 @@ t.test('ls --json', (t) => {
         name: 'test-npm-ls',
         version: '1.0.0',
         problems: [
+          /* eslint-disable-next-line max-len */
           'invalid: optional-dep@1.0.0 {CWD}/tap-testdir-ls-ls---json-unmet-optional-dep/node_modules/optional-dep', // mismatching optional deps get flagged in problems
         ],
         dependencies: {
@@ -3599,6 +3465,7 @@ t.test('ls --json', (t) => {
             version: '1.0.0',
             invalid: '"^2.0.0" from the root project',
             problems: [
+              /* eslint-disable-next-line max-len */
               'invalid: optional-dep@1.0.0 {CWD}/tap-testdir-ls-ls---json-unmet-optional-dep/node_modules/optional-dep',
             ],
           },
@@ -3743,6 +3610,7 @@ t.test('ls --json', (t) => {
               version: '1.1.1',
               id: 'abbrev@1.1.1',
               from: 'git+https://github.com/isaacs/abbrev-js.git',
+              /* eslint-disable-next-line max-len */
               resolved: 'git+https://github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             },
           },
@@ -3753,6 +3621,7 @@ t.test('ls --json', (t) => {
             version: '1.1.1',
             _id: 'abbrev@1.1.1',
             _from: 'git+https://github.com/isaacs/abbrev-js.git',
+            /* eslint-disable-next-line max-len */
             _resolved: 'git+https://github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             _requested: {
               type: 'git',
@@ -3776,6 +3645,7 @@ t.test('ls --json', (t) => {
         dependencies: {
           abbrev: {
             version: '1.1.1',
+            /* eslint-disable-next-line max-len */
             resolved: 'git+ssh://git@github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
           },
         },
@@ -3812,10 +3682,7 @@ t.test('ls --json', (t) => {
                 saveSpec: null,
                 fetchSpec: 'latest',
               },
-              _requiredBy: [
-                '#USER',
-                '/',
-              ],
+              _requiredBy: ['#USER', '/'],
               _shasum: '3c07708ec9ef3e3c985cf0ddd67df09ab8ec2abc',
               _spec: 'simple-output',
             },
@@ -3838,10 +3705,7 @@ t.test('ls --json', (t) => {
               saveSpec: null,
               fetchSpec: 'latest',
             },
-            _requiredBy: [
-              '#USER',
-              '/',
-            ],
+            _requiredBy: ['#USER', '/'],
             _shasum: '3c07708ec9ef3e3c985cf0ddd67df09ab8ec2abc',
             _spec: 'simple-output',
           }),
@@ -3985,19 +3849,14 @@ t.test('show multiple invalid reasons', async t => {
     },
   })
 
-  const cleanupPaths = str =>
-    redactCwd(str).toLowerCase().replace(/\\/g, '/')
-  await t.rejects(
-    ls.exec([]),
-    { code: 'ELSPROBLEMS' },
-    'should list dep problems'
-  )
+  const cleanupPaths = str => redactCwd(str).toLowerCase().replace(/\\/g, '/')
+  await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'should list dep problems')
   t.matchSnapshot(cleanupPaths(result), 'ls result')
 })
 
-t.test('ls --package-lock-only', (t) => {
+t.test('ls --package-lock-only', t => {
   config['package-lock-only'] = true
-  t.test('ls --package-lock-only --json', (t) => {
+  t.test('ls --package-lock-only --json', t => {
     t.beforeEach(cleanUpResult)
     config.json = true
     config.parseable = false
@@ -4188,11 +4047,7 @@ t.test('ls --package-lock-only', (t) => {
         },
         'should output json contaning only occurrences of filtered by package'
       )
-      t.equal(
-        process.exitCode,
-        0,
-        'should exit with error code 0'
-      )
+      t.equal(process.exitCode, 0, 'should exit with error code 0')
     })
 
     t.test('with filter arg nested dep', async t => {
@@ -4297,6 +4152,7 @@ t.test('ls --package-lock-only', (t) => {
             },
           },
         },
+        /* eslint-disable-next-line max-len */
         'should output json contaning only occurrences of multiple filtered packages and their ancestors'
       )
     })
@@ -4337,11 +4193,7 @@ t.test('ls --package-lock-only', (t) => {
         },
         'should output json containing no dependencies info'
       )
-      t.equal(
-        process.exitCode,
-        1,
-        'should exit with error code 1'
-      )
+      t.equal(process.exitCode, 1, 'should exit with error code 1')
       process.exitCode = 0
     })
 
@@ -4527,17 +4379,14 @@ t.test('ls --package-lock-only', (t) => {
           },
         }),
       })
-      await t.rejects(
-        ls.exec([]),
-        { code: 'ELSPROBLEMS' },
-        'should list dep problems'
-      )
+      await t.rejects(ls.exec([]), { code: 'ELSPROBLEMS' }, 'should list dep problems')
       t.same(
         jsonParse(result),
         {
           name: 'test-npm-ls',
           version: '1.0.0',
           problems: [
+            /* eslint-disable-next-line max-len */
             'invalid: foo@1.0.0 {CWD}/tap-testdir-ls-ls---package-lock-only-ls---package-lock-only---json-missing-invalid-extraneous/node_modules/foo',
             'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
           ],
@@ -4546,6 +4395,7 @@ t.test('ls --package-lock-only', (t) => {
               version: '1.0.0',
               invalid: '"^2.0.0" from the root project',
               problems: [
+                /* eslint-disable-next-line max-len */
                 'invalid: foo@1.0.0 {CWD}/tap-testdir-ls-ls---package-lock-only-ls---package-lock-only---json-missing-invalid-extraneous/node_modules/foo',
               ],
               dependencies: {
@@ -4557,9 +4407,7 @@ t.test('ls --package-lock-only', (t) => {
             ipsum: {
               required: '^1.0.0',
               missing: true,
-              problems: [
-                'missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0',
-              ],
+              problems: ['missing: ipsum@^1.0.0, required by test-npm-ls@1.0.0'],
             },
           },
         },
@@ -4586,7 +4434,9 @@ t.test('ls --package-lock-only', (t) => {
             'node_modules/@isaacs/dedupe-tests-a': {
               name: '@isaacs/dedupe-tests-a',
               version: '1.0.1',
+              /* eslint-disable-next-line max-len */
               resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
+              /* eslint-disable-next-line max-len */
               integrity: 'sha512-8AN9lNCcBt5Xeje7fMEEpp5K3rgcAzIpTtAjYb/YMUYu8SbIVF6wz0WqACDVKvpQOUcSfNHZQNLNmue0QSwXOQ==',
               dependencies: {
                 '@isaacs/dedupe-tests-b': '1',
@@ -4595,20 +4445,26 @@ t.test('ls --package-lock-only', (t) => {
             'node_modules/@isaacs/dedupe-tests-a/node_modules/@isaacs/dedupe-tests-b': {
               name: '@isaacs/dedupe-tests-b',
               version: '1.0.0',
+              /* eslint-disable-next-line max-len */
               resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
+              /* eslint-disable-next-line max-len */
               integrity: 'sha512-3nmvzIb8QL8OXODzipwoV3U8h9OQD9g9RwOPuSBQqjqSg9JZR1CCFOWNsDUtOfmwY8HFUJV9EAZ124uhqVxq+w==',
             },
             'node_modules/@isaacs/dedupe-tests-b': {
               name: '@isaacs/dedupe-tests-b',
               version: '2.0.0',
+              /* eslint-disable-next-line max-len */
               resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
+              /* eslint-disable-next-line max-len */
               integrity: 'sha512-KTYkpRv9EzlmCg4Gsm/jpclWmRYFCXow8GZKJXjK08sIZBlElTZEa5Bw/UQxIvEfcKmWXczSqItD49Kr8Ax4UA==',
             },
           },
           dependencies: {
             '@isaacs/dedupe-tests-a': {
               version: '1.0.1',
+              /* eslint-disable-next-line max-len */
               resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
+              /* eslint-disable-next-line max-len */
               integrity: 'sha512-8AN9lNCcBt5Xeje7fMEEpp5K3rgcAzIpTtAjYb/YMUYu8SbIVF6wz0WqACDVKvpQOUcSfNHZQNLNmue0QSwXOQ==',
               requires: {
                 '@isaacs/dedupe-tests-b': '1',
@@ -4616,14 +4472,18 @@ t.test('ls --package-lock-only', (t) => {
               dependencies: {
                 '@isaacs/dedupe-tests-b': {
                   version: '1.0.0',
+                  /* eslint-disable-next-line max-len */
                   resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
+                  /* eslint-disable-next-line max-len */
                   integrity: 'sha512-3nmvzIb8QL8OXODzipwoV3U8h9OQD9g9RwOPuSBQqjqSg9JZR1CCFOWNsDUtOfmwY8HFUJV9EAZ124uhqVxq+w==',
                 },
               },
             },
             '@isaacs/dedupe-tests-b': {
               version: '2.0.0',
+              /* eslint-disable-next-line max-len */
               resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
+              /* eslint-disable-next-line max-len */
               integrity: 'sha512-KTYkpRv9EzlmCg4Gsm/jpclWmRYFCXow8GZKJXjK08sIZBlElTZEa5Bw/UQxIvEfcKmWXczSqItD49Kr8Ax4UA==',
             },
           },
@@ -4646,17 +4506,20 @@ t.test('ls --package-lock-only', (t) => {
           dependencies: {
             '@isaacs/dedupe-tests-a': {
               version: '1.0.1',
-              resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
+              resolved:
+                'https://registry.npmjs.org/@isaacs/dedupe-tests-a/-/dedupe-tests-a-1.0.1.tgz',
               dependencies: {
                 '@isaacs/dedupe-tests-b': {
                   version: '1.0.0',
-                  resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
+                  resolved:
+                    'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-1.0.0.tgz',
                 },
               },
             },
             '@isaacs/dedupe-tests-b': {
               version: '2.0.0',
-              resolved: 'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
+              resolved:
+                'https://registry.npmjs.org/@isaacs/dedupe-tests-b/-/dedupe-tests-b-2.0.0.tgz',
             },
           },
         },
@@ -4716,12 +4579,12 @@ t.test('ls --package-lock-only', (t) => {
           requires: true,
           dependencies: {
             abbrev: {
+              /* eslint-disable-next-line max-len */
               version: 'git+ssh://git@github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
               from: 'abbrev@git+https://github.com/isaacs/abbrev-js.git',
             },
           },
-        }
-        ),
+        }),
       })
       await ls.exec([])
       t.same(
@@ -4731,6 +4594,7 @@ t.test('ls --package-lock-only', (t) => {
           version: '1.0.0',
           dependencies: {
             abbrev: {
+              /* eslint-disable-next-line max-len */
               resolved: 'git+ssh://git@github.com/isaacs/abbrev-js.git#b8f3a2fc0c3bb8ffd8b0d0072cc6b5a3667e963c',
             },
           },

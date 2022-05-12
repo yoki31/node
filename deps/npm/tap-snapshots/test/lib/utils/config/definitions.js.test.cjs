@@ -76,6 +76,7 @@ Array [
   "init.license",
   "init.module",
   "init.version",
+  "install-links",
   "json",
   "key",
   "legacy-bundling",
@@ -85,6 +86,7 @@ Array [
   "location",
   "lockfile-version",
   "loglevel",
+  "logs-dir",
   "logs-max",
   "long",
   "maxsockets",
@@ -151,6 +153,7 @@ Array [
   "which",
   "workspace",
   "workspaces",
+  "workspaces-update",
   "yes",
 ]
 `
@@ -166,6 +169,8 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for _auth
 * Type: null or String
 
 A basic-auth string to use when authenticating against the npm registry.
+This will ONLY be used to authenticate against the npm registry. For other
+registries you will need to scope it like "//other-registry.tld/:_auth"
 
 Warning: This should generally not be set via a command-line option. It is
 safer to use a registry-provided authentication bearer token stored in the
@@ -659,6 +664,7 @@ mistakes, unnecessary performance degradation, and malicious input.
 * Allow conflicting peerDependencies to be installed in the root project.
 * Implicitly set \`--yes\` during \`npm init\`.
 * Allow clobbering existing values in \`npm pkg\`
+* Allow unpublishing of entire packages (not just a single version).
 
 If you don't have a clear idea of what you want to do, it is strongly
 recommended that you do not use this option!
@@ -715,7 +721,8 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for git-t
 * Default: true
 * Type: Boolean
 
-Tag the commit when using the \`npm version\` command.
+Tag the commit when using the \`npm version\` command. Setting this to false
+results in no commit being made at all.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for global 1`] = `
@@ -791,6 +798,8 @@ This option can be used when it's desirable to optionally run a script when
 it's present and fail if the script fails. This is useful, for example, when
 running scripts that may only apply for some builds in an otherwise generic
 CI setup.
+
+This value is not exported to the environment for child processes.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for ignore-scripts 1`] = `
@@ -844,6 +853,8 @@ Include the workspace root when workspaces are enabled for a command.
 When false, specifying individual workspaces via the \`workspace\` config, or
 all workspaces via the \`workspaces\` flag, will cause npm to operate only on
 the specified workspaces, and not on the root project.
+
+This value is not exported to the environment for child processes.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for init-author-email 1`] = `
@@ -963,6 +974,17 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for init.
 * DEPRECATED: Use \`--init-version\` instead.
 
 Alias for \`--init-version\`
+`
+
+exports[`test/lib/utils/config/definitions.js TAP > config description for install-links 1`] = `
+#### \`install-links\`
+
+* Default: false
+* Type: Boolean
+
+When set file: protocol dependencies that exist outside of the project root
+will be packed and installed as regular dependencies instead of creating a
+symlink. This option has no effect on workspaces.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for json 1`] = `
@@ -1087,13 +1109,23 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for logle
 * Type: "silent", "error", "warn", "notice", "http", "timing", "info",
   "verbose", or "silly"
 
-What level of logs to report. On failure, *all* logs are written to
-\`npm-debug.log\` in the current working directory.
+What level of logs to report. All logs are written to a debug log, with the
+path to that file printed if the execution of a command fails.
 
 Any logs of a higher level than the setting are shown. The default is
 "notice".
 
 See also the \`foreground-scripts\` config.
+`
+
+exports[`test/lib/utils/config/definitions.js TAP > config description for logs-dir 1`] = `
+#### \`logs-dir\`
+
+* Default: A directory named \`_logs\` inside the cache
+* Type: null or Path
+
+The location of npm's log directory. See [\`npm logging\`](/using-npm/logging)
+for more information.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for logs-max 1`] = `
@@ -1103,6 +1135,8 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for logs-
 * Type: Number
 
 The maximum number of log files to store.
+
+If set to 0, no log files will be written for the current run.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for long 1`] = `
@@ -1268,9 +1302,7 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for packa
 If set to false, then ignore \`package-lock.json\` files when installing. This
 will also prevent _writing_ \`package-lock.json\` if \`save\` is true.
 
-When package package-locks are disabled, automatic pruning of extraneous
-modules will also be disabled. To remove extraneous modules with
-package-locks disabled use \`npm prune\`.
+This configuration does not affect \`npm ci\`.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for package-lock-only 1`] = `
@@ -1406,13 +1438,15 @@ The base URL of the npm registry.
 exports[`test/lib/utils/config/definitions.js TAP > config description for save 1`] = `
 #### \`save\`
 
-* Default: true
+* Default: \`true\` unless when using \`npm update\` where it defaults to \`false\`
 * Type: Boolean
 
-Save installed packages to a package.json file as dependencies.
+Save installed packages to a \`package.json\` file as dependencies.
 
 When used with the \`npm rm\` command, removes the dependency from
-package.json.
+\`package.json\`.
+
+Will also prevent writing to \`package-lock.json\` if set to \`false\`.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for save-bundle 1`] = `
@@ -1425,7 +1459,7 @@ If a package would be saved at install time by the use of \`--save\`,
 \`--save-dev\`, or \`--save-optional\`, then also put it in the
 \`bundleDependencies\` list.
 
-Ignore if \`--save-peer\` is set, since peerDependencies cannot be bundled.
+Ignored if \`--save-peer\` is set, since peerDependencies cannot be bundled.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for save-dev 1`] = `
@@ -1462,7 +1496,7 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for save-
 * Default: false
 * Type: Boolean
 
-Save installed packages. to a package.json file as \`peerDependencies\`
+Save installed packages to a package.json file as \`peerDependencies\`
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for save-prefix 1`] = `
@@ -1713,9 +1747,9 @@ exports[`test/lib/utils/config/definitions.js TAP > config description for timin
 * Default: false
 * Type: Boolean
 
-If true, writes an \`npm-debug\` log to \`_logs\` and timing information to
-\`_timing.json\`, both in your cache, even if the command completes
-successfully. \`_timing.json\` is a newline delimited list of JSON objects.
+If true, writes a debug log to \`logs-dir\` and timing information to
+\`_timing.json\` in the cache, even if the command completes successfully.
+\`_timing.json\` is a newline delimited list of JSON objects.
 
 You can quickly view it with this [json](https://npm.im/json) command line:
 \`npm exec -- json -g < ~/.npm/_timing.json\`.
@@ -1906,6 +1940,16 @@ other things (test, exec, publish, etc.) will operate on the root project,
 _unless_ one or more workspaces are specified in the \`workspace\` config.
 
 This value is not exported to the environment for child processes.
+`
+
+exports[`test/lib/utils/config/definitions.js TAP > config description for workspaces-update 1`] = `
+#### \`workspaces-update\`
+
+* Default: true
+* Type: Boolean
+
+If set to true, the npm cli will run an update after operations that may
+possibly change the workspaces installed to the \`node_modules\` folder.
 `
 
 exports[`test/lib/utils/config/definitions.js TAP > config description for yes 1`] = `

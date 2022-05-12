@@ -797,6 +797,24 @@ for (let i = 0; i < 12; i++) {
     fi.emit('data', 'asdf\n');
   }
 
+  // Ensure that options.signal.removeEventListener was called
+  {
+    const ac = new AbortController();
+    const signal = ac.signal;
+    const [rli] = getInterface({ terminal });
+    signal.removeEventListener = common.mustCall(
+      (event, onAbortFn) => {
+        assert.strictEqual(event, 'abort');
+        assert.strictEqual(onAbortFn.name, 'onAbort');
+      });
+
+    rli.question('hello?', { signal }).then(common.mustCall());
+
+    rli.write('bar\n');
+    ac.abort();
+    rli.close();
+  }
+
   // Sending a blank line
   {
     const [rli, fi] = getInterface({ terminal });
@@ -909,6 +927,47 @@ for (let i = 0; i < 12; i++) {
     rli.write('bar\n');
     rli.close();
   }
+
+  (async () => {
+    const [rli] = getInterface({ terminal });
+    const signal = AbortSignal.abort('boom');
+    await assert.rejects(rli.question('hello', { signal }), {
+      cause: 'boom',
+    });
+    rli.close();
+  })().then(common.mustCall());
+
+  // Throw an error when question is executed with an aborted signal
+  {
+    const ac = new AbortController();
+    const signal = ac.signal;
+    ac.abort();
+    const [rli] = getInterface({ terminal });
+    assert.rejects(
+      rli.question('hello?', { signal }),
+      {
+        name: 'AbortError'
+      }
+    ).then(common.mustCall());
+    rli.close();
+  }
+
+  // Call question after close
+  {
+    const [rli, fi] = getInterface({ terminal });
+    rli.question('What\'s your name?').then(common.mustCall((name) => {
+      assert.strictEqual(name, 'Node.js');
+      rli.close();
+      rli.question('How are you?')
+        .then(common.mustNotCall(), common.expectsError({
+          code: 'ERR_USE_AFTER_CLOSE',
+          name: 'Error'
+        }));
+      assert.notStrictEqual(rli.getPrompt(), 'How are you?');
+    }));
+    fi.emit('data', 'Node.js\n');
+  }
+
 
   // Can create a new readline Interface with a null output argument
   {

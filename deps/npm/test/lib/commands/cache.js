@@ -12,11 +12,6 @@ const rimraf = (path, cb) => {
 }
 
 let logOutput = []
-const npmlog = {
-  silly: (...args) => {
-    logOutput.push(['silly', ...args])
-  },
-}
 
 let tarballStreamSpec = ''
 let tarballStreamOpts = {}
@@ -56,14 +51,17 @@ const setupCacacheFixture = () => {
   pkgs.forEach(pkg => addCacachePkg(...pkg))
   // corrupt the packument
   cacacheContent[
+    /* eslint-disable-next-line max-len */
     [cacacheEntries['make-fetch-happen:request-cache:https://registry.npmjs.org/corrupted'].integrity]
   ].data = Buffer.from('<>>>}"')
   // nuke the version dist
   cacacheContent[
+    /* eslint-disable-next-line max-len */
     [cacacheEntries['make-fetch-happen:request-cache:https://registry.npmjs.org/missing-dist'].integrity]
   ].data = Buffer.from(JSON.stringify({ versions: { '23.0.0': {} } }))
   // make the version a non-object
   cacacheContent[
+    /* eslint-disable-next-line max-len */
     [cacacheEntries['make-fetch-happen:request-cache:https://registry.npmjs.org/missing-version'].integrity]
   ].data = Buffer.from(JSON.stringify({ versions: 'hello' }))
 }
@@ -87,8 +85,9 @@ const addCacachePkg = (spec, registry, publicURL) => {
   const parts = npa(spec)
   const ver = parts.rawSpec || '1.0.0'
   let url = `${registry}/${parts.name}/-/${parts.name}-${ver}.tgz`
-  if (!publicURL)
+  if (!publicURL) {
     url = `${registry}/aabbcc/${contentId}`
+  }
   const key = `make-fetch-happen:request-cache:${url}`
   const pkey = `make-fetch-happen:request-cache:${registry}/${parts.escapedName}`
   if (!packuments[parts.escapedName]) {
@@ -114,14 +113,16 @@ const cacache = {
   },
   get: (path, key) => {
     if (cacacheEntries[key] === undefined
-      || cacacheContent[cacacheEntries[key].integrity] === undefined)
+      || cacacheContent[cacacheEntries[key].integrity] === undefined) {
       throw new Error()
+    }
     return cacacheContent[cacacheEntries[key].integrity]
   },
   rm: {
     entry: (path, key) => {
-      if (cacacheEntries[key] === undefined)
+      if (cacacheEntries[key] === undefined) {
         throw new Error()
+      }
       delete cacacheEntries[key]
     },
     content: (path, sha) => {
@@ -135,9 +136,16 @@ const cacache = {
 
 const Cache = t.mock('../../../lib/commands/cache.js', {
   cacache,
-  npmlog,
   pacote,
   rimraf,
+  'proc-log': {
+    silly: (...args) => {
+      logOutput.push(['silly', ...args])
+    },
+    warn: (...args) => {
+      logOutput.push(['warn', ...args])
+    },
+  },
 })
 
 const npm = mockNpm({
@@ -146,11 +154,6 @@ const npm = mockNpm({
   config: { force: false },
   output: (msg) => {
     outputOutput.push(msg)
-  },
-  log: {
-    warn: (...args) => {
-      logOutput.push(['warn', ...args])
-    },
   },
 })
 const cache = new Cache(npm)
@@ -193,7 +196,7 @@ t.test('cache add no arg', async t => {
     cache.exec(['add']),
     {
       code: 'EUSAGE',
-      message: 'Usage: First argument to `add` is required',
+      message: 'First argument to `add` is required',
     },
     'throws usage error'
   )
@@ -243,9 +246,12 @@ t.test('cache ls', async t => {
   setupCacacheFixture()
   await cache.exec(['ls'])
   t.strictSame(outputOutput, [
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@fritzy/staydown/-/@fritzy/staydown-3.1.1.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@fritzy%2fstaydown',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@gar/npm-expansion/-/@gar/npm-expansion-2.1.0.tgz',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@gar/npm-expansion/-/@gar/npm-expansion-3.0.0-beta.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@gar%2fnpm-expansion',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/ape-ecs',
@@ -255,8 +261,10 @@ t.test('cache ls', async t => {
     'make-fetch-happen:request-cache:https://registry.npmjs.org/foo',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/foo/-/foo-1.2.3-beta.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-dist',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-dist/-/missing-dist-23.0.0.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-version',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-version/-/missing-version-16.2.0.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/npm',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/npm/-/npm-1.2.0.tgz',
@@ -320,8 +328,10 @@ t.test('cache ls scoped and scoped slash', async t => {
   })
   await cache.exec(['ls', '@fritzy/staydown', '@gar/npm-expansion'])
   t.strictSame(outputOutput, [
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@fritzy/staydown/-/@fritzy/staydown-3.1.1.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@fritzy%2fstaydown',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@gar/npm-expansion/-/@gar/npm-expansion-2.1.0.tgz',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/@gar%2fnpm-expansion',
   ])
@@ -345,6 +355,7 @@ t.test('cache ls missing packument dist', async t => {
   await cache.exec(['ls', 'missing-dist'])
   t.strictSame(outputOutput, [
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-dist',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-dist/-/missing-dist-23.0.0.tgz',
   ])
 })
@@ -356,6 +367,7 @@ t.test('cache ls missing packument version not an object', async t => {
   await cache.exec(['ls', 'missing-version'])
   t.strictSame(outputOutput, [
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-version',
+    /* eslint-disable-next-line max-len */
     'make-fetch-happen:request-cache:https://registry.npmjs.org/missing-version/-/missing-version-16.2.0.tgz',
   ])
 })
@@ -367,6 +379,7 @@ t.test('cache rm', async t => {
   await cache.exec(['rm',
     'make-fetch-happen:request-cache:https://registry.npmjs.org/webpack/-/webpack-4.44.1.tgz'])
   t.strictSame(outputOutput, [
+    /* eslint-disable-next-line max-len */
     'Deleted: make-fetch-happen:request-cache:https://registry.npmjs.org/webpack/-/webpack-4.44.1.tgz',
   ])
 })

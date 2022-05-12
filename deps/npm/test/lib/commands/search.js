@@ -33,7 +33,6 @@ const libnpmsearch = {
 const mocks = {
   npmlog,
   libnpmsearch,
-  '../../../lib/utils/usage.js': () => 'usage instructions',
 }
 
 t.afterEach(() => {
@@ -69,8 +68,9 @@ t.test('search <name>', async t => {
   })
   const search = new Search(npm)
 
-  for (const i of libnpmsearchResultFixture)
+  for (const i of libnpmsearchResultFixture) {
     src.write(i)
+  }
 
   src.end()
 
@@ -96,8 +96,9 @@ t.test('search <name> --json', async t => {
   })
   const search = new Search(npm)
 
-  for (const i of libnpmsearchResultFixture)
+  for (const i of libnpmsearchResultFixture) {
     src.write(i)
+  }
 
   src.end()
   await search.exec(['libnpm'])
